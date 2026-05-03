@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/order_provider.dart';
+import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
 
@@ -14,19 +15,25 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
   Widget build(BuildContext context) {
     final companyId = Provider.of<AuthService>(context).currentCompanyId ?? 'comp_001';
     return Scaffold(
-      appBar: AppBar(title: Text('طلبات الشراء'),
-                     automaticallyImplyLeading: false,
-                     centerTitle: true, backgroundColor: Colors.teal),
-
+      appBar: AppBar(
+        title: Text('طلبات الشراء'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+      ),
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
           final orders = orderProvider.getOrdersForCompany(companyId);
           if (orders.isEmpty) {
-            return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
-              SizedBox(height: 16),
-              Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
-            ]));
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                ],
+              ),
+            );
           }
           return ListView.builder(
             padding: EdgeInsets.all(12),
@@ -72,13 +79,25 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
     }
   }
 
-  void _updateOrderStatus(String newStatus, {String? rejectReason}) {
+  void _acceptOrder() {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    orderProvider.updateOrderStatus(widget.order.id, newStatus, rejectionReason: rejectReason);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم تحديث حالة الطلب'), backgroundColor: Colors.green));
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    orderProvider.acceptOrder(widget.order.id, accountProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
+    );
+  }
+
+  void _rejectOrder() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
+    );
   }
 
   void _showRejectDialog() {
+    _rejectReasonController.clear();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -96,9 +115,8 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
           ElevatedButton(
             onPressed: () {
               if (_rejectReasonController.text.isNotEmpty) {
-                _updateOrderStatus('rejected', rejectReason: _rejectReasonController.text);
+                _rejectOrder();
                 Navigator.pop(ctx);
-                _rejectReasonController.clear();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('يرجى كتابة سبب الرفض'), backgroundColor: Colors.orange));
               }
@@ -108,6 +126,22 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
           ),
         ],
       ),
+    );
+  }
+
+  void _updateShipping() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    orderProvider.updateOrderStatus(widget.order.id, 'shipped');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
+    );
+  }
+
+  void _updateDelivered() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    orderProvider.updateOrderStatus(widget.order.id, 'delivered');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
     );
   }
 
@@ -198,13 +232,13 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                       children: [
                         Expanded(child: OutlinedButton(onPressed: _showRejectDialog, style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.red)), child: Text('رفض', style: TextStyle(color: Colors.red)))),
                         SizedBox(width: 8),
-                        Expanded(child: ElevatedButton(onPressed: () => _updateOrderStatus('accepted'), style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: Text('قبول'))),
+                        Expanded(child: ElevatedButton(onPressed: _acceptOrder, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: Text('قبول'))),
                       ],
                     ),
                   if (order.status == 'accepted')
-                    SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => _updateOrderStatus('shipped'), style: ElevatedButton.styleFrom(backgroundColor: Colors.purple), child: Text('تأكيد الشحن'))),
+                    SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _updateShipping, style: ElevatedButton.styleFrom(backgroundColor: Colors.purple), child: Text('تأكيد الشحن'))),
                   if (order.status == 'shipped')
-                    SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => _updateOrderStatus('delivered'), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('تسليم الطلب'))),
+                    SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _updateDelivered, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('تسليم الطلب'))),
                 ],
               ),
             ),

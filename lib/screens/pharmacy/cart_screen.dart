@@ -198,7 +198,7 @@ class _CartScreenState extends State<CartScreen> {
                   );
                 },
               ),
-              _buildCheckoutButton(itemsByCompany, cartProvider, authService),
+              
             ],
           ),
         );

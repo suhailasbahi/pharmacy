@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/order_provider.dart';
+import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
 
@@ -43,10 +44,7 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('لوحة التحكم'),
-                     automaticallyImplyLeading: false,
-             centerTitle: true, backgroundColor: Colors.teal),
-
+      appBar: AppBar(title: Text('لوحة التحكم'), centerTitle: true, backgroundColor: Colors.teal),
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
           final orders = filteredOrders;
@@ -143,12 +141,97 @@ class DashboardOrderCard extends StatefulWidget {
 
 class _DashboardOrderCardState extends State<DashboardOrderCard> {
   bool _isExpanded = false;
-  String _getStatusText(String status) { switch (status) { case 'pending': return 'قيد المراجعة'; case 'accepted': return 'تم القبول'; case 'rejected': return 'مرفوض'; case 'shipped': return 'تم الشحن'; case 'delivered': return 'تم التسليم'; default: return status; } }
-  Color _getStatusColor(String status) { switch (status) { case 'pending': return Colors.orange; case 'accepted': return Colors.blue; case 'rejected': return Colors.red; case 'shipped': return Colors.purple; case 'delivered': return Colors.green; default: return Colors.grey; } }
+  final TextEditingController _rejectReasonController = TextEditingController();
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'pending': return 'قيد المراجعة';
+      case 'accepted': return 'تم القبول';
+      case 'rejected': return 'مرفوض';
+      case 'shipped': return 'تم الشحن';
+      case 'delivered': return 'تم التسليم';
+      default: return status;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'pending': return Colors.orange;
+      case 'accepted': return Colors.blue;
+      case 'rejected': return Colors.red;
+      case 'shipped': return Colors.purple;
+      case 'delivered': return Colors.green;
+      default: return Colors.grey;
+    }
+  }
+
+  void _acceptOrder() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    orderProvider.acceptOrder(widget.order.id, accountProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
+    );
+  }
+
+  void _rejectOrder() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
+    );
+  }
+
+  void _showRejectDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('رفض الطلب', style: TextStyle(color: Colors.red)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('يرجى كتابة سبب الرفض:'),
+            SizedBox(height: 16),
+            TextField(controller: _rejectReasonController, decoration: InputDecoration(hintText: 'مثال: المنتج غير متوفر'), maxLines: 3),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              if (_rejectReasonController.text.isNotEmpty) {
+                _rejectOrder();
+                Navigator.pop(ctx);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('يرجى كتابة سبب الرفض'), backgroundColor: Colors.orange));
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('تأكيد الرفض'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _updateShipping() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    orderProvider.updateOrderStatus(widget.order.id, 'shipped');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
+    );
+  }
+
+  void _updateDelivered() {
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    orderProvider.updateOrderStatus(widget.order.id, 'delivered');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     return Card(
       margin: EdgeInsets.only(bottom: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
@@ -206,12 +289,14 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
                 Divider(),
                 if (widget.order.status == 'pending')
                   Row(children: [
-                    Expanded(child: OutlinedButton(onPressed: () { orderProvider.updateOrderStatus(widget.order.id, 'rejected'); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red)); }, style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.red)), child: Text('رفض', style: TextStyle(color: Colors.red)))),
+                    Expanded(child: OutlinedButton(onPressed: _showRejectDialog, style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.red)), child: Text('رفض', style: TextStyle(color: Colors.red)))),
                     SizedBox(width: 8),
-                    Expanded(child: ElevatedButton(onPressed: () { orderProvider.updateOrderStatus(widget.order.id, 'accepted'); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green)); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: Text('قبول'))),
+                    Expanded(child: ElevatedButton(onPressed: _acceptOrder, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: Text('قبول'))),
                   ]),
                 if (widget.order.status == 'accepted')
-                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () { orderProvider.updateOrderStatus(widget.order.id, 'shipped'); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple)); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.purple), child: Text('تأكيد الشحن'))),
+                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _updateShipping, style: ElevatedButton.styleFrom(backgroundColor: Colors.purple), child: Text('تأكيد الشحن'))),
+                if (widget.order.status == 'shipped')
+                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _updateDelivered, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('تسليم الطلب'))),
               ]),
             ),
         ],
