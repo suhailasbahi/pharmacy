@@ -2,7 +2,8 @@ import 'product_model.dart';
 import 'agency_model.dart';
 import 'region_pricing.dart';
 
-final dummyAgencies = [
+// متغير وليس final لكي نتمكن من إضافة وكالات جديدة
+var dummyAgencies = [
   AgencyModel(
     id: 'agency_1',
     name: 'وكالة الخليج',
@@ -18,10 +19,12 @@ final dummyAgencies = [
         concentration: '500mg',
         stockQuantity: 100,
         requiresCooling: false,
-        expiryDate: DateTime(2025,12,31),
+        expiryDate: DateTime(2025, 12, 31),
         isActive: true,
         createdAt: DateTime.now(),
-        regionPrices: [RegionPricing(regionId: 'sanaa', regionName: 'صنعاء', price: 15.0, currency: 'yemen')],
+        regionPrices: [
+          RegionPricing(regionId: 'sanaa', regionName: 'صنعاء', price: 15.0, currency: 'yemen')
+        ],
         bonusCash: null,
         bonusCredit: null,
         pricePerPiece: 0.15,
@@ -32,7 +35,6 @@ final dummyAgencies = [
         hasOffer: true,
         offerPrice: 12.0,
       ),
-      // أضف منتجات أخرى حسب الحاجة
     ],
   ),
 ];

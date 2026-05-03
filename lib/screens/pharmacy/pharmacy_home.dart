@@ -11,6 +11,7 @@ import '../shared/profile_screen.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/auth_service.dart';
 import '../../screens/splash_screen.dart';
+import 'pharmacy_detailed_reports_screen.dart';
 
 class PharmacyHomeScreen extends StatefulWidget {
   final String selectedCity;
@@ -107,6 +108,14 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()));
               },
             ),
+              ListTile(
+  leading: const Icon(Icons.assessment, color: Colors.teal),
+  title: const Text('تقارير تفصيلية'),
+  onTap: () {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const PharmacyDetailedReportsScreen()));
+  },
+),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.business, color: Colors.teal),

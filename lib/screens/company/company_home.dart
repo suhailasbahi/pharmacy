@@ -10,6 +10,7 @@ import '../pharmacy/reports_screen.dart';
 import '../../services/auth_service.dart';
 import '../../screens/splash_screen.dart';
 import 'customers_screen.dart';
+import 'company_detailed_reports_screen.dart';
 
 class CompanyHomeScreen extends StatefulWidget {
   const CompanyHomeScreen({Key? key}) : super(key: key);
@@ -112,6 +113,14 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()));
               },
             ),
+              ListTile(
+  leading: const Icon(Icons.assessment, color: Colors.teal),
+  title: const Text('تقارير تفصيلية'),
+  onTap: () {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const CompanyDetailedReportsScreen()));
+  },
+),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.people, color: Colors.teal),

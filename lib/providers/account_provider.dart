@@ -28,16 +28,22 @@ class AccountProvider extends ChangeNotifier {
   }
 
   void addSupplierTransaction(String supplierId, Transaction transaction) {
-    final index = _suppliers.indexWhere((s) => s.id == supplierId);
-    if (index != -1) {
-      final supplier = _suppliers[index];
-      final newTransactions = [...supplier.transactions, transaction];
-      final newBalance = supplier.balance + transaction.amount;
-      _suppliers[index] = supplier.copyWith(balance: newBalance, transactions: newTransactions);
-      notifyListeners();
+  final index = _suppliers.indexWhere((s) => s.id == supplierId);
+  if (index != -1) {
+    final supplier = _suppliers[index];
+    final newTransactions = [...supplier.transactions, transaction];
+    double newBalance;
+    if (transaction.type == 'payment') {
+      // تسديد المورد يقلل الرصيد المستحق (لأن الصيدلية دفعت)
+      newBalance = supplier.balance - transaction.amount;
+    } else {
+      // شراء بالدين يزيد الرصيد المستحق
+      newBalance = supplier.balance + transaction.amount;
     }
+    _suppliers[index] = supplier.copyWith(balance: newBalance, transactions: newTransactions);
+    notifyListeners();
   }
-
+}
   // ========== إدارة العملاء (للشركة) ==========
   void addCustomer(CustomerAccount customer) {
     _customers.add(customer);
@@ -58,15 +64,22 @@ class AccountProvider extends ChangeNotifier {
   }
 
   void addCustomerTransaction(String customerId, Transaction transaction) {
-    final index = _customers.indexWhere((c) => c.id == customerId);
-    if (index != -1) {
-      final customer = _customers[index];
-      final newTransactions = [...customer.transactions, transaction];
-      final newBalance = customer.balance + transaction.amount;
-      _customers[index] = customer.copyWith(balance: newBalance, transactions: newTransactions);
-      notifyListeners();
+  final index = _customers.indexWhere((c) => c.id == customerId);
+  if (index != -1) {
+    final customer = _customers[index];
+    final newTransactions = [...customer.transactions, transaction];
+    double newBalance;
+    if (transaction.type == 'payment') {
+      // الدفعة المستلمة تقلل الرصيد المستحق على العميل
+      newBalance = customer.balance - transaction.amount;
+    } else {
+      // المشتريات تزيد الرصيد
+      newBalance = customer.balance + transaction.amount;
     }
+    _customers[index] = customer.copyWith(balance: newBalance, transactions: newTransactions);
+    notifyListeners();
   }
+}
 
   // بيانات تجريبية للاختبار
   void loadSampleData() {

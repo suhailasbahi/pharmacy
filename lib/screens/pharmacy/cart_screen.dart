@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/cart_provider.dart';
 import '../../providers/order_provider.dart';
+import '../../providers/account_provider.dart';
 import '../../widgets/category_helpers.dart';
 import '../../services/auth_service.dart';
 import '../../models/cart_item.dart';
+import '../../models/account_model.dart';
 import 'pharmacy_home.dart';
 
 class CartScreen extends StatefulWidget {
@@ -24,9 +26,7 @@ class _CartScreenState extends State<CartScreen> {
       builder: (context, cartProvider, authService, child) {
         if (cartProvider.items.isEmpty) {
           return Scaffold(
-            appBar: AppBar(title: Text('سلة المشتريات'), centerTitle: true,
-                        automaticallyImplyLeading: false,
-                           backgroundColor: Colors.teal),
+            appBar: AppBar(title: Text('سلة المشتريات'), centerTitle: true, backgroundColor: Colors.teal),
             body: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -319,7 +319,8 @@ class _CartScreenState extends State<CartScreen> {
     final totalPrice = cartProvider.totalPrice;
     final pharmacyId = authService.currentUserId ?? 'pharmacy_demo_123';
     final pharmacyName = authService.currentPharmacyName ?? 'صيدلية تجريبية';
-    final pharmacyCity = 'صنعاء';
+    final pharmacyCity = authService.currentRegionId ?? 'صنعاء';
+    final regionId = authService.currentRegionId ?? 'sanaa';
 
     return Positioned(
       bottom: 0,
@@ -344,23 +345,64 @@ class _CartScreenState extends State<CartScreen> {
                 onPressed: () async {
                   try {
                     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-                    // داخل _buildCheckoutButton، عند استدعاء orderProvider.addOrders:
-for (var entry in itemsByCompany.entries) {
-  final items = entry.value;
-  final paymentOpt = _paymentOptions[entry.key]!;
-  final regionId = authService.currentRegionId ?? 'sanaa'; // أضف هذا السطر
-  orderProvider.addOrders(
-    items,
-    totalPrice,
-    pharmacyId: pharmacyId,
-    pharmacyName: pharmacyName,
-    pharmacyCity: pharmacyCity,
-    regionId: regionId,          // أضف هذه القيمة
-    paymentType: paymentOpt['paymentType'],
-    paymentMethod: paymentOpt['paymentMethod'],
-    creditDays: paymentOpt['creditDays'],
+                    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+                    
+                    for (var entry in itemsByCompany.entries) {
+                      final items = entry.value;
+                      final paymentOpt = _paymentOptions[entry.key]!;
+                      final companyName = items.first.companyName;
+                      
+                      // إضافة الطلب إلى orderProvider
+                      orderProvider.addOrders(
+                        items,
+                        totalPrice,
+                        pharmacyId: pharmacyId,
+                        pharmacyName: pharmacyName,
+                        pharmacyCity: pharmacyCity,
+                        regionId: regionId,
+                        paymentType: paymentOpt['paymentType'],
+                        paymentMethod: paymentOpt['paymentMethod'],
+                        creditDays: paymentOpt['creditDays'],
                       );
+                      
+                      // إذا كان نوع الدفع "أجل"، يتم إضافة دين على الصيدلية للمورد (الشركة)
+                      final transactionAmount = (paymentOpt['paymentType'] == 'credit') 
+                          ? items.fold(0.0, (sum, item) => sum + item.totalPrice) 
+                          : 0.0;
+                          
+                      if (transactionAmount > 0) {
+                        // البحث عن مورد بنفس اسم الشركة
+                        final existingSupplier = accountProvider.suppliers.firstWhere(
+                          (s) => s.name == companyName,
+                          orElse: () => SupplierAccount(
+                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            name: companyName,
+                            phone: '',
+                            balance: 0,
+                            createdAt: DateTime.now(),
+                          ),
+                        );
+                        
+                        final transaction = Transaction(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          amount: transactionAmount,
+                          date: DateTime.now(),
+                          note: 'شراء أدوية أجل من $companyName',
+                          type: 'purchase',
+                        );
+                        
+                        if (existingSupplier.id.isNotEmpty && accountProvider.suppliers.contains(existingSupplier)) {
+                          accountProvider.addSupplierTransaction(existingSupplier.id, transaction);
+                        } else {
+                          final newSupplier = existingSupplier.copyWith(
+                            balance: transactionAmount,
+                            transactions: [transaction],
+                          );
+                          accountProvider.addSupplier(newSupplier);
+                        }
+                      }
                     }
+                    
                     cartProvider.clearCart();
                     _paymentOptions.clear();
                     if (mounted) {

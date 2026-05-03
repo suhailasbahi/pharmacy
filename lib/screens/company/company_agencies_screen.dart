@@ -25,26 +25,46 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
   }
 
   void _addAgency() {
+    final nameController = TextEditingController();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('إضافة وكالة جديدة'),
+        title: const Text('إضافة وكالة جديدة'),
         content: TextField(
-          decoration: InputDecoration(labelText: 'اسم الوكالة'),
+          controller: nameController,
+          decoration: const InputDecoration(labelText: 'اسم الوكالة'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('إلغاء'),
+            child: const Text('إلغاء'),
           ),
           ElevatedButton(
             onPressed: () {
+              if (nameController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('يرجى إدخال اسم الوكالة'), backgroundColor: Colors.orange),
+                );
+                return;
+              }
+              final newAgency = AgencyModel(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                name: nameController.text.trim(),
+                companyId: 'comp_001',
+                companyName: 'شركة الأدوية العربية',
+                products: [],
+                isActive: true,
+              );
+              setState(() {
+                agencies.add(newAgency);
+                dummyAgencies.add(newAgency);
+              });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('إضافة وكالة قيد التطوير'), backgroundColor: Colors.orange),
+                const SnackBar(content: Text('تم إضافة الوكالة بنجاح'), backgroundColor: Colors.green),
               );
             },
-            child: Text('إضافة'),
+            child: const Text('إضافة'),
           ),
         ],
       ),
@@ -56,13 +76,11 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('الوكالات (${agencies.length})'),
-        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.teal,
-       
         actions: [
           IconButton(
-            icon: Icon(Icons.add),
+            icon: const Icon(Icons.add),
             onPressed: _addAgency,
             tooltip: 'إضافة وكالة',
           ),
@@ -73,16 +91,16 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.store, size: 80, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('لا توجد وكالات', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                  SizedBox(height: 8),
-                  Text('أضف وكالة جديدة بالضغط على زر +', style: TextStyle(color: Colors.grey)),
+                  const Icon(Icons.store, size: 80, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text('لا توجد وكالات', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  const Text('أضف وكالة جديدة بالضغط على زر +', style: TextStyle(color: Colors.grey)),
                 ],
               ),
             )
           : ListView.builder(
-              padding: EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
               itemCount: agencies.length,
               itemBuilder: (context, index) {
                 final agency = agencies[index];
@@ -101,7 +119,7 @@ class AgencyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
         leading: Container(
@@ -111,37 +129,37 @@ class AgencyCard extends StatelessWidget {
             color: Colors.teal.shade100,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(Icons.store, color: Colors.teal),
+          child: const Icon(Icons.store, color: Colors.teal),
         ),
         title: Text(
           agency.name,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         subtitle: Text('${agency.products.length} منتج'),
         children: [
           Padding(
-            padding: EdgeInsets.all(12),
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
                     TextButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('إضافة منتج للوكالة من شاشة إضافة دواء'), backgroundColor: Colors.orange),
+                          const SnackBar(content: Text('إضافة منتج للوكالة من شاشة إضافة دواء'), backgroundColor: Colors.orange),
                         );
                       },
-                      icon: Icon(Icons.add, size: 16),
-                      label: Text('إضافة منتج'),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('إضافة منتج'),
                     ),
                   ],
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 agency.products.isEmpty
-                    ? Center(
+                    ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(20),
                           child: Text('لا توجد منتجات في هذه الوكالة', style: TextStyle(color: Colors.grey)),
@@ -149,8 +167,8 @@ class AgencyCard extends StatelessWidget {
                       )
                     : GridView.builder(
                         shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           childAspectRatio: 0.7,
                           crossAxisSpacing: 12,

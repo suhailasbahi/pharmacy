@@ -249,7 +249,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
               if (amount <= 0) return;
               final transaction = Transaction(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                amount: amount,
+                amount: amount, // سالب لتقليل الرصيد المستحق للمورد
                 date: DateTime.now(),
                 note: noteController.text.trim(),
                 type: 'payment',

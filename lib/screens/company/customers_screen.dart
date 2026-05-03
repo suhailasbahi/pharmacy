@@ -242,11 +242,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
             onPressed: () {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount <= 0) return;
-              // إضافة معاملة موجبة (تسديد) تقلل من الرصيد المستحق على العميل
               final transaction = Transaction(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                amount: amount, // موجب لأن الرصيد ينقص
-                date: DateTime.now(),
+                amount: amount, 
+                  date: DateTime.now(),
                 note: noteController.text.trim(),
                 type: 'payment',
               );
