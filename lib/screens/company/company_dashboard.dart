@@ -43,7 +43,10 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('لوحة التحكم'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(title: Text('لوحة التحكم'),
+                     automaticallyImplyLeading: false,
+             centerTitle: true, backgroundColor: Colors.teal),
+
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
           final orders = filteredOrders;

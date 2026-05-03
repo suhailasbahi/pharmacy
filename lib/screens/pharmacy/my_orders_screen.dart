@@ -9,7 +9,8 @@ class MyOrdersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final pharmacyId = Provider.of<AuthService>(context).currentUserId ?? 'pharmacy_demo_123';
     return Scaffold(
-      appBar: AppBar(title: Text('طلباتي'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(title: Text('طلباتي'),
+                     automaticallyImplyLeading: false,centerTitle: true, backgroundColor: Colors.teal),
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
           final orders = orderProvider.getOrdersForPharmacy(pharmacyId);

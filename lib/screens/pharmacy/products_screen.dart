@@ -69,6 +69,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('تصفح الأدوية'),
+          automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [

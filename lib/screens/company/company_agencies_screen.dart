@@ -56,8 +56,10 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('الوكالات (${agencies.length})'),
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.teal,
+       
         actions: [
           IconButton(
             icon: Icon(Icons.add),

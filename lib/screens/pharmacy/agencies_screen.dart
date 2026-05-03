@@ -20,6 +20,7 @@ class AgenciesScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(companyName),
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.teal,
       ),
@@ -111,7 +112,7 @@ class AgencyCard extends StatelessWidget {
                           product: product,
                           isInCart: isInCart,
                           regionId: regionId,
-                          showAddToCart: true,
+                          showAddToCart: false, // إخفاء الزر
                         ),
                       );
                     },

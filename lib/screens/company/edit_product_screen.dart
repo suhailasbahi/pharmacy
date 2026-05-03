@@ -38,7 +38,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
   final ImagePicker _picker = ImagePicker();
 
   final List<Map<String, String>> regions = [
-    {'id': 'sanaa', 'name': 'صنعاء'}, {'id': 'aden', 'name': 'عدن'}, {'id': 'taiz', 'name': 'تعز'}, {'id': 'hodeidah', 'name': 'الحديدة'}, {'id': 'ibb', 'name': 'إب'}, {'id': 'mukalla', 'name': 'المكلا'}, {'id': 'sayun', 'name': 'سيئون'},
+    {'id': 'sanaa', 'name': 'صنعاء'},
+    {'id': 'aden', 'name': 'عدن'},
+    {'id': 'taiz', 'name': 'تعز'},
+    {'id': 'hodeidah', 'name': 'الحديدة'},
+    {'id': 'ibb', 'name': 'إب'},
+    {'id': 'mukalla', 'name': 'المكلا'},
+    {'id': 'sayun', 'name': 'سيئون'},
   ];
 
   @override
@@ -68,7 +74,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
   }
 
   Future<void> _selectExpiryDate() async {
-    final DateTime? picked = await showDatePicker(context: context, initialDate: _expiryDate, firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 1825)));
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 1825)),
+    );
     if (picked != null) setState(() => _expiryDate = picked);
   }
 
@@ -91,7 +102,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       createdAt: widget.product.createdAt,
       regionPrices: _regionPrices,
       hasOffer: _hasOffer,
-      offerPrice: double.tryParse(_offerPriceController.text),
+      offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
       bonusCash: _bonusCash,
       bonusCredit: _bonusCredit,
       pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
@@ -104,14 +115,21 @@ class _EditProductScreenState extends State<EditProductScreen> {
     final index = widget.agency.products.indexWhere((p) => p.id == widget.product.id);
     if (index != -1) widget.agency.products[index] = updatedProduct;
     setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم تعديل المنتج بنجاح'), backgroundColor: Colors.green));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تم تعديل المنتج بنجاح'), backgroundColor: Colors.green),
+    );
     Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('تعديل المنتج'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(
+        title: const Text('تعديل المنتج'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+        automaticallyImplyLeading: false, // إزالة سهم الرجوع
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -119,33 +137,35 @@ class _EditProductScreenState extends State<EditProductScreen> {
           child: Column(
             children: [
               _buildImagePicker(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_nameController, 'الاسم التجاري', Icons.medication),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_scientificNameController, 'الاسم العلمي', Icons.science),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_concentrationController, 'التركيز', Icons.straighten),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildNumberField(_stockController, 'الكمية المتاحة', Icons.inventory),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildMinOrderField(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildUnitDropdown(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_pricePerPieceController, 'سعر الباكيت', Icons.currency_bitcoin, isNumber: true),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_pricePerCartonController, 'سعر الكرتون', Icons.inventory, isNumber: true),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_piecesPerCartonController, 'عدد الباكيتات في الكرتون', Icons.view_agenda, isNumber: true),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
+              _buildOfferSection(),
+              const SizedBox(height: 16),
               _buildRegionPricingTable(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildBonusesSection(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildExpiryDatePicker(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildCoolingSwitch(),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               _buildSubmitButton(),
             ],
           ),
@@ -154,71 +174,152 @@ class _EditProductScreenState extends State<EditProductScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController c, String label, IconData icon, {bool isNumber = false}) => TextFormField(
-        controller: c,
-        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-        validator: (v) => v!.isEmpty ? 'أدخل $label' : null,
-      );
-
-  Widget _buildNumberField(TextEditingController c, String label, IconData icon) => TextFormField(
-        controller: c,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-        validator: (v) => v!.isEmpty ? 'أدخل $label' : null,
-      );
-
-  Widget _buildMinOrderField() => TextFormField(
-        controller: _minOrderController,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: 'الحد الأدنى للطلب (بالباكيت)', prefixIcon: Icon(Icons.low_priority), suffixText: 'باكيت', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-      );
-
-  Widget _buildUnitDropdown() => Container(
-        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: _defaultUnit,
-            items: const [DropdownMenuItem(value: 'piece', child: Text('باكيت')), DropdownMenuItem(value: 'carton', child: Text('كرتون'))],
-            onChanged: (value) => setState(() => _defaultUnit = value!),
+  Widget _buildOfferSection() {
+    return Card(
+      child: ExpansionTile(
+        title: const Text('عرض خاص', style: TextStyle(fontWeight: FontWeight.bold)),
+        children: [
+          SwitchListTile(
+            title: const Text('تفعيل عرض خاص'),
+            value: _hasOffer,
+            onChanged: (val) => setState(() => _hasOffer = val),
           ),
+          if (_hasOffer)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _offerPriceController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'سعر العرض (وحدة البيع الافتراضية)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController c, String label, IconData icon, {bool isNumber = false}) {
+    return TextFormField(
+      controller: c,
+      keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      validator: (v) => v!.isEmpty ? 'أدخل $label' : null,
+    );
+  }
+
+  Widget _buildNumberField(TextEditingController c, String label, IconData icon) {
+    return TextFormField(
+      controller: c,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      validator: (v) => v!.isEmpty ? 'أدخل $label' : null,
+    );
+  }
+
+  Widget _buildMinOrderField() {
+    return TextFormField(
+      controller: _minOrderController,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(
+        labelText: 'الحد الأدنى للطلب (بالباكيت)',
+        prefixIcon: const Icon(Icons.low_priority),
+        suffixText: 'باكيت',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildUnitDropdown() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade400),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _defaultUnit,
+          items: const [
+            DropdownMenuItem(value: 'piece', child: Text('باكيت')),
+            DropdownMenuItem(value: 'carton', child: Text('كرتون')),
+          ],
+          onChanged: (value) => setState(() => _defaultUnit = value!),
         ),
-      );
+      ),
+    );
+  }
 
   Widget _buildRegionPricingTable() {
     return Card(
       child: ExpansionTile(
-        title: Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columns: [DataColumn(label: Text('المنطقة')), DataColumn(label: Text('السعر')), DataColumn(label: Text('العملة')), DataColumn(label: Text('الضريبة %'))],
+              columns: const [
+                DataColumn(label: Text('المنطقة')),
+                DataColumn(label: Text('السعر')),
+                DataColumn(label: Text('العملة')),
+                DataColumn(label: Text('الضريبة %'))
+              ],
               rows: _regionPrices.map((rp) {
                 int idx = _regionPrices.indexOf(rp);
                 return DataRow(cells: [
                   DataCell(Text(rp.regionName)),
                   DataCell(TextField(
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: 'السعر'),
-                    onChanged: (val) {
-                      double price = double.tryParse(val) ?? 0;
-                      setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: price, currency: rp.currency, taxRate: rp.taxRate));
-                    },
+                    decoration: const InputDecoration(labelText: 'السعر'),
+                    onChanged: (val) => setState(() {
+                      _regionPrices[idx] = RegionPricing(
+                        regionId: rp.regionId,
+                        regionName: rp.regionName,
+                        price: double.tryParse(val) ?? 0,
+                        currency: rp.currency,
+                        taxRate: rp.taxRate,
+                      );
+                    }),
                   )),
                   DataCell(DropdownButton<String>(
                     value: rp.currency,
-                    items: const [DropdownMenuItem(value: 'yemen', child: Text('ريال يمني')), DropdownMenuItem(value: 'saudi', child: Text('ريال سعودي')), DropdownMenuItem(value: 'dollar', child: Text('دولار'))],
-                    onChanged: (val) => setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: rp.price, currency: val!, taxRate: rp.taxRate)),
+                    items: const [
+                      DropdownMenuItem(value: 'yemen', child: Text('ريال يمني')),
+                      DropdownMenuItem(value: 'saudi', child: Text('ريال سعودي')),
+                      DropdownMenuItem(value: 'dollar', child: Text('دولار')),
+                    ],
+                    onChanged: (val) => setState(() {
+                      _regionPrices[idx] = RegionPricing(
+                        regionId: rp.regionId,
+                        regionName: rp.regionName,
+                        price: rp.price,
+                        currency: val!,
+                        taxRate: rp.taxRate,
+                      );
+                    }),
                   )),
                   DataCell(TextField(
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: '%'),
-                    onChanged: (val) {
-                      double tax = double.tryParse(val) ?? 0;
-                      setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: rp.price, currency: rp.currency, taxRate: tax));
-                    },
+                    decoration: const InputDecoration(labelText: '%'),
+                    onChanged: (val) => setState(() {
+                      _regionPrices[idx] = RegionPricing(
+                        regionId: rp.regionId,
+                        regionName: rp.regionName,
+                        price: rp.price,
+                        currency: rp.currency,
+                        taxRate: double.tryParse(val) ?? 0,
+                      );
+                    }),
                   )),
                 ]);
               }).toList(),
@@ -229,63 +330,102 @@ class _EditProductScreenState extends State<EditProductScreen> {
     );
   }
 
-  Widget _buildBonusesSection() => Card(
-        child: ExpansionTile(
-          title: Text('البونص (نقدي وآجل)', style: TextStyle(fontWeight: FontWeight.bold)),
-          children: [
-            ListTile(
-              title: Text('بونص على الطلبات النقدية'),
-              subtitle: TextField(
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'النسبة المئوية (مثال: 10)'),
-                onChanged: (val) {
-                  double p = double.tryParse(val) ?? 0;
-                  setState(() => _bonusCash = p > 0 ? BonusModel(percentage: p, forCashOnly: true) : null);
-                },
-              ),
+  Widget _buildBonusesSection() {
+    return Card(
+      child: ExpansionTile(
+        title: const Text('البونص (نقدي وآجل)', style: TextStyle(fontWeight: FontWeight.bold)),
+        children: [
+          ListTile(
+            title: const Text('بونص على الطلبات النقدية'),
+            subtitle: TextField(
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'النسبة المئوية (مثال: 10)'),
+              onChanged: (val) {
+                double p = double.tryParse(val) ?? 0;
+                setState(() {
+                  _bonusCash = p > 0 ? BonusModel(percentage: p, forCashOnly: true) : null;
+                });
+              },
             ),
-            Divider(),
-            ListTile(
-              title: Text('بونص على الطلبات الآجلة'),
-              subtitle: TextField(
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'النسبة المئوية (مثال: 5)'),
-                onChanged: (val) {
-                  double p = double.tryParse(val) ?? 0;
-                  setState(() => _bonusCredit = p > 0 ? BonusModel(percentage: p, forCashOnly: false) : null);
-                },
-              ),
+          ),
+          const Divider(),
+          ListTile(
+            title: const Text('بونص على الطلبات الآجلة'),
+            subtitle: TextField(
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'النسبة المئوية (مثال: 5)'),
+              onChanged: (val) {
+                double p = double.tryParse(val) ?? 0;
+                setState(() {
+                  _bonusCredit = p > 0 ? BonusModel(percentage: p, forCashOnly: false) : null;
+                });
+              },
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _buildExpiryDatePicker() => InkWell(
-        onTap: _selectExpiryDate,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
-          child: Row(children: [
-            Icon(Icons.calendar_today, color: Colors.teal),
-            const SizedBox(width: 12),
-            Text('تاريخ الصلاحية: ${_expiryDate.year}-${_expiryDate.month}-${_expiryDate.day}'),
-          ]),
+  Widget _buildExpiryDatePicker() {
+    return InkWell(
+      onTap: _selectExpiryDate,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(12),
         ),
-      );
+        child: Row(children: [
+          const Icon(Icons.calendar_today, color: Colors.teal),
+          const SizedBox(width: 12),
+          Text('تاريخ الصلاحية: ${_expiryDate.year}-${_expiryDate.month}-${_expiryDate.day}'),
+        ]),
+      ),
+    );
+  }
 
-  Widget _buildCoolingSwitch() => SwitchListTile(title: const Text('يحتاج تبريد'), value: _requiresCooling, onChanged: (v) => setState(() => _requiresCooling = v));
+  Widget _buildCoolingSwitch() {
+    return SwitchListTile(
+      title: const Text('يحتاج تبريد'),
+      value: _requiresCooling,
+      onChanged: (v) => setState(() => _requiresCooling = v),
+      activeColor: Colors.teal,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
 
-  Widget _buildImagePicker() => GestureDetector(
-        onTap: _pickImage,
-        child: Container(
-          height: 150,
-          width: double.infinity,
-          decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
-          child: _selectedImage != null
-              ? Image.file(_selectedImage!, fit: BoxFit.cover)
-              : (widget.product.imageUrl != null ? Image.file(File(widget.product.imageUrl!), fit: BoxFit.cover) : Icon(Icons.add_photo_alternate, size: 48, color: Colors.grey)),
+  Widget _buildImagePicker() {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        height: 150,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
         ),
-      );
-  
-  Widget _buildSubmitButton() => SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _isLoading ? null : _updateProduct, child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('حفظ التعديلات')));
+        child: _selectedImage != null
+            ? Image.file(_selectedImage!, fit: BoxFit.cover)
+            : (widget.product.imageUrl != null
+                ? Image.file(File(widget.product.imageUrl!), fit: BoxFit.cover)
+                : const Icon(Icons.add_photo_alternate, size: 48, color: Colors.grey)),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _updateProduct,
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text('حفظ التعديلات'),
+      ),
+    );
+  }
 }

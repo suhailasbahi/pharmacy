@@ -1,4 +1,4 @@
- import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/product_model.dart';
@@ -23,6 +23,8 @@ class ProductDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authService = Provider.of<AuthService>(context);
+    final bool isCompany = authService.currentUserType == 'company';
     final cartProvider = Provider.of<CartProvider>(context);
     final isInCart = cartProvider.isInCart(product.id);
     final price = product.getFinalPriceForRegion(regionId);
@@ -35,6 +37,7 @@ class ProductDetailsScreen extends StatelessWidget {
         title: Text(product.name),
         centerTitle: true,
         backgroundColor: Colors.teal,
+        // تم إزالة automaticallyImplyLeading false لإبقاء سهم العودة
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -55,21 +58,21 @@ class ProductDetailsScreen extends StatelessWidget {
                 children: [
                   Text(
                     product.name,
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     product.scientificName,
                     style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     product.concentration,
                     style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: product.hasOffer ? Colors.red.shade50 : Colors.teal.shade50,
                       borderRadius: BorderRadius.circular(12),
@@ -77,14 +80,14 @@ class ProductDetailsScreen extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('السعر:', style: TextStyle(fontSize: 18)),
+                        const Text('السعر:', style: TextStyle(fontSize: 18)),
                         if (product.hasOffer && product.offerPrice != null)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
                                 '${product.offerPrice!.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.red,
@@ -92,7 +95,7 @@ class ProductDetailsScreen extends StatelessWidget {
                               ),
                               Text(
                                 '${price.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   decoration: TextDecoration.lineThrough,
                                   color: Colors.grey,
                                   fontSize: 14,
@@ -103,7 +106,7 @@ class ProductDetailsScreen extends StatelessWidget {
                         else
                           Text(
                             '${price.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.teal,
@@ -112,10 +115,10 @@ class ProductDetailsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   if (product.piecesPerCarton > 0 && product.defaultUnit == 'carton')
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Colors.blue.shade50,
                         borderRadius: BorderRadius.circular(12),
@@ -123,7 +126,7 @@ class ProductDetailsScreen extends StatelessWidget {
                       child: Row(
                         children: [
                           Icon(Icons.info_outline, color: Colors.blue.shade800),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'الكرتون الواحد يحتوي على ${product.piecesPerCarton} باكيت\nيمكنك شراء الباكيت بسعر ${product.pricePerPiece} $currencySymbol',
@@ -133,10 +136,10 @@ class ProductDetailsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   if (product.bonusCash != null && product.bonusCash!.percentage > 0)
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(12),
@@ -144,7 +147,7 @@ class ProductDetailsScreen extends StatelessWidget {
                       child: Row(
                         children: [
                           Icon(Icons.percent, color: Colors.amber.shade800),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'بونص نقدي: ${product.bonusCash!.percentage}% على الكمية',
@@ -156,7 +159,7 @@ class ProductDetailsScreen extends StatelessWidget {
                     ),
                   if (product.bonusCredit != null && product.bonusCredit!.percentage > 0)
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Colors.amber.shade50,
                         borderRadius: BorderRadius.circular(12),
@@ -164,7 +167,7 @@ class ProductDetailsScreen extends StatelessWidget {
                       child: Row(
                         children: [
                           Icon(Icons.percent, color: Colors.amber.shade800),
-                          SizedBox(width: 12),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'بونص آجل: ${product.bonusCredit!.percentage}% على الكمية',
@@ -174,10 +177,10 @@ class ProductDetailsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Card(
                     child: Padding(
-                      padding: EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
                           _buildInfoRow('شركة الأدوية:', product.companyName),
@@ -187,46 +190,48 @@ class ProductDetailsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (isInCart) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('${product.name} موجود بالفعل في السلة')),
-                          );
-                        } else {
-                          final cartItem = CartItem.fromProduct(product, regionId);
-                          cartProvider.addToCart(cartItem, isCashOrder: true);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('تم إضافة ${product.name} إلى السلة'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isInCart ? Colors.grey : Colors.teal,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  const SizedBox(height: 24),
+                  // إخفاء زر الإضافة إذا كان المستخدم شركة
+                  if (!isCompany)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (isInCart) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('${product.name} موجود بالفعل في السلة')),
+                            );
+                          } else {
+                            final cartItem = CartItem.fromProduct(product, regionId);
+                            cartProvider.addToCart(cartItem, isCashOrder: true);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('تم إضافة ${product.name} إلى السلة'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isInCart ? Colors.grey : Colors.teal,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          isInCart ? 'المنتج موجود في السلة' : 'أضف إلى السلة',
+                          style: const TextStyle(fontSize: 18),
                         ),
                       ),
-                      child: Text(
-                        isInCart ? 'المنتج موجود في السلة' : 'أضف إلى السلة',
-                        style: TextStyle(fontSize: 18),
-                      ),
                     ),
-                  ),
                   if (similar.isNotEmpty) ...[
-                    SizedBox(height: 24),
+                    const SizedBox(height: 24),
                     Text(
                       'منتجات مشابهة (نفس الاسم العلمي)',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     SizedBox(
                       height: 160,
                       child: ListView.builder(
@@ -247,10 +252,10 @@ class ProductDetailsScreen extends StatelessWidget {
                               );
                             },
                             child: Card(
-                              margin: EdgeInsets.only(right: 12),
+                              margin: const EdgeInsets.only(right: 12),
                               child: Container(
                                 width: 140,
-                                padding: EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(8),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -258,11 +263,11 @@ class ProductDetailsScreen extends StatelessWidget {
                                       height: 80,
                                       width: double.infinity,
                                       color: Colors.teal.shade100,
-                                      child: Center(child: Icon(Icons.medication, size: 40)),
+                                      child: const Center(child: Icon(Icons.medication, size: 40)),
                                     ),
-                                    SizedBox(height: 8),
-                                    Text(p.name, style: TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                    Text('$pPrice $pSymbol', style: TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 8),
+                                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    Text('$pPrice $pSymbol', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ),
@@ -289,7 +294,7 @@ class ProductDetailsScreen extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
           Text(
             value,

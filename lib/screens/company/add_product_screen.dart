@@ -141,7 +141,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('إضافة دواء جديد'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(title: const Text('إضافة دواء جديد'),
+                     automaticallyImplyLeading: false,
+                     centerTitle: true, backgroundColor: Colors.teal),
+     
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(

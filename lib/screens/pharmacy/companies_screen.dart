@@ -36,6 +36,7 @@ class _CompaniesScreenState extends State<CompaniesScreen> {
       appBar: AppBar(
         title: Text('الشركات'),
         centerTitle: true,
+          automaticallyImplyLeading: false,
         backgroundColor: Colors.teal,
         bottom: PreferredSize(
           preferredSize: Size.fromHeight(70),

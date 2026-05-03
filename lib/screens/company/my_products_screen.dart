@@ -60,7 +60,10 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('منتجاتي (${productEntries.length})'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(title: Text('منتجاتي (${productEntries.length})'),
+                     automaticallyImplyLeading: false,
+                     centerTitle: true, backgroundColor: Colors.teal),
+
       body: productEntries.isEmpty
           ? Center(
               child: Column(

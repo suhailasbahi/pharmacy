@@ -24,7 +24,9 @@ class _CartScreenState extends State<CartScreen> {
       builder: (context, cartProvider, authService, child) {
         if (cartProvider.items.isEmpty) {
           return Scaffold(
-            appBar: AppBar(title: Text('سلة المشتريات'), centerTitle: true, backgroundColor: Colors.teal),
+            appBar: AppBar(title: Text('سلة المشتريات'), centerTitle: true,
+                        automaticallyImplyLeading: false,
+                           backgroundColor: Colors.teal),
             body: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

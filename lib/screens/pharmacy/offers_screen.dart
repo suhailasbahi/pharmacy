@@ -20,6 +20,7 @@ class OffersScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('العروض الخاصة'),
+          automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.teal,
       ),

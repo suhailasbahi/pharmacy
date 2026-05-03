@@ -41,7 +41,9 @@ class CompanyProductCard extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => ProductDetailsScreen(product: product, regionId: 'sanaa')),
+          MaterialPageRoute(
+            builder: (_) => ProductDetailsScreen(product: product, regionId: 'sanaa'),
+          ),
         );
       },
       child: Card(
@@ -109,6 +111,7 @@ class CompanyProductCard extends StatelessWidget {
                           ),
                       ],
                     ),
+                    // لا يوجد زر "أضف إلى السلة"
                   ],
                 ),
               ),

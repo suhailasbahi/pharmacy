@@ -1,16 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/product_model.dart';
-import '../models/cart_item.dart';
-import '../providers/cart_provider.dart';
 import '../screens/pharmacy/product_details_screen.dart';
 
 class ProductCard extends StatelessWidget {
   final ProductModel product;
   final bool isInCart;
   final String regionId;
-  final bool showAddToCart;
+  final bool showAddToCart; // لن نستخدمه
 
   const ProductCard({
     Key? key,
@@ -146,32 +143,7 @@ class ProductCard extends StatelessWidget {
                           ),
                       ],
                     ),
-                    if (showAddToCart)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                            if (isInCart) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('${product.name} موجود بالفعل في السلة')),
-                              );
-                            } else {
-                              final cartItem = CartItem.fromProduct(product, regionId);
-                              cartProvider.addToCart(cartItem, isCashOrder: true);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('تم إضافة ${product.name} إلى السلة'), backgroundColor: Colors.green),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            minimumSize: Size(0, 32),
-                            backgroundColor: isInCart ? Colors.grey : Colors.teal,
-                          ),
-                          child: Text(isInCart ? 'موجود' : 'أضف للسلة', style: TextStyle(fontSize: 12)),
-                        ),
-                      ),
+                    // تمت إزالة زر "أضف إلى السلة" نهائياً
                   ],
                 ),
               ),

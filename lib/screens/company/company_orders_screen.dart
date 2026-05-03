@@ -14,7 +14,10 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
   Widget build(BuildContext context) {
     final companyId = Provider.of<AuthService>(context).currentCompanyId ?? 'comp_001';
     return Scaffold(
-      appBar: AppBar(title: Text('طلبات الشراء'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(title: Text('طلبات الشراء'),
+                     automaticallyImplyLeading: false,
+                     centerTitle: true, backgroundColor: Colors.teal),
+
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
           final orders = orderProvider.getOrdersForCompany(companyId);
