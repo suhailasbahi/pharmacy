@@ -16,6 +16,7 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
   String? _selectedProductId;
   List<String> _productNames = [];
   Map<String, String> _productIdToName = {};
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
@@ -35,13 +36,29 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
     setState(() {});
   }
 
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _dateRange,
+    );
+    if (picked != null) setState(() => _dateRange = picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pharmacyId = Provider.of<AuthService>(context).currentUserId ?? 'pharmacy_demo_123';
-    final orders = Provider.of<OrderProvider>(context)
+    List<OrderModel> orders = Provider.of<OrderProvider>(context)
         .getOrdersForPharmacy(pharmacyId);
 
-    Map<String, Map<String, double>> purchasesByProductSupplier = {}; // productName -> supplier -> total
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
+
+    Map<String, Map<String, double>> purchasesByProductSupplier = {};
 
     for (var order in orders) {
       final supplier = order.companyName;
@@ -70,9 +87,31 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
         title: const Text('مشتريات صنف حسب المورد'),
         centerTitle: true,
         backgroundColor: Colors.teal,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: _selectDateRange,
+            tooltip: 'تحديد فترة',
+          ),
+        ],
       ),
       body: Column(
         children: [
+          if (_dateRange != null)
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.grey.shade100,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                  TextButton(
+                    onPressed: () => setState(() => _dateRange = null),
+                    child: const Text('إلغاء التصفية'),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: DropdownButtonFormField<String>(
@@ -108,4 +147,6 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
       ),
     );
   }
+
+  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
 }

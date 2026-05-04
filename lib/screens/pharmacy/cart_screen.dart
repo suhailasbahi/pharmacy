@@ -198,7 +198,7 @@ class _CartScreenState extends State<CartScreen> {
                   );
                 },
               ),
-              
+              _buildCheckoutButton(itemsByCompany, cartProvider, authService),
             ],
           ),
         );
@@ -345,14 +345,11 @@ class _CartScreenState extends State<CartScreen> {
                 onPressed: () async {
                   try {
                     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-                    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
                     
                     for (var entry in itemsByCompany.entries) {
                       final items = entry.value;
                       final paymentOpt = _paymentOptions[entry.key]!;
-                      final companyName = items.first.companyName;
                       
-                      // إضافة الطلب إلى orderProvider
                       orderProvider.addOrders(
                         items,
                         totalPrice,
@@ -364,43 +361,6 @@ class _CartScreenState extends State<CartScreen> {
                         paymentMethod: paymentOpt['paymentMethod'],
                         creditDays: paymentOpt['creditDays'],
                       );
-                      
-                      // إذا كان نوع الدفع "أجل"، يتم إضافة دين على الصيدلية للمورد (الشركة)
-                      final transactionAmount = (paymentOpt['paymentType'] == 'credit') 
-                          ? items.fold(0.0, (sum, item) => sum + item.totalPrice) 
-                          : 0.0;
-                          
-                      if (transactionAmount > 0) {
-                        // البحث عن مورد بنفس اسم الشركة
-                        final existingSupplier = accountProvider.suppliers.firstWhere(
-                          (s) => s.name == companyName,
-                          orElse: () => SupplierAccount(
-                            id: DateTime.now().millisecondsSinceEpoch.toString(),
-                            name: companyName,
-                            phone: '',
-                            balance: 0,
-                            createdAt: DateTime.now(),
-                          ),
-                        );
-                        
-                        final transaction = Transaction(
-                          id: DateTime.now().millisecondsSinceEpoch.toString(),
-                          amount: transactionAmount,
-                          date: DateTime.now(),
-                          note: 'شراء أدوية أجل من $companyName',
-                          type: 'purchase',
-                        );
-                        
-                        if (existingSupplier.id.isNotEmpty && accountProvider.suppliers.contains(existingSupplier)) {
-                          accountProvider.addSupplierTransaction(existingSupplier.id, transaction);
-                        } else {
-                          final newSupplier = existingSupplier.copyWith(
-                            balance: transactionAmount,
-                            transactions: [transaction],
-                          );
-                          accountProvider.addSupplier(newSupplier);
-                        }
-                      }
                     }
                     
                     cartProvider.clearCart();

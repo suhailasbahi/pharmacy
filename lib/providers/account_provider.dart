@@ -105,7 +105,7 @@ class AccountProvider extends ChangeNotifier {
           pharmacyId: 'pharm1',
           pharmacyName: 'صيدلية السلام',
           phone: '777888999',
-          balance: -2500,
+          balance: 2500,
           createdAt: DateTime.now(),
           transactions: [
             Transaction(id: 't1', amount: -2500, date: DateTime.now(), note: 'شراء أدوية أجل', type: 'purchase'),

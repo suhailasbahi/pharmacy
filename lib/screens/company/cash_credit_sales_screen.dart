@@ -14,6 +14,7 @@ class CashCreditSalesScreen extends StatefulWidget {
 class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   String _selectedRegion = 'all';
   List<String> regions = [];
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
@@ -27,11 +28,27 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     regions = ['all', ...orders.map((o) => o.pharmacyCity).toSet().toList()];
   }
 
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: _dateRange,
+    );
+    if (picked != null) setState(() => _dateRange = picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final companyId = Provider.of<AuthService>(context).currentCompanyId ?? 'comp_001';
-    final orders = Provider.of<OrderProvider>(context)
+    List<OrderModel> orders = Provider.of<OrderProvider>(context)
         .getOrdersForCompany(companyId);
+
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
 
     double totalCash = 0, totalCredit = 0;
     Map<String, double> cashByRegion = {}, creditByRegion = {};
@@ -61,9 +78,31 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         title: const Text('تفصيل المبيعات (نقدي / آجل)'),
         centerTitle: true,
         backgroundColor: Colors.teal,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: _selectDateRange,
+            tooltip: 'تحديد فترة',
+          ),
+        ],
       ),
       body: Column(
         children: [
+          if (_dateRange != null)
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.grey.shade100,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                  TextButton(
+                    onPressed: () => setState(() => _dateRange = null),
+                    child: const Text('إلغاء التصفية'),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(12),
             child: DropdownButtonFormField<String>(
@@ -141,4 +180,6 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
       ),
     );
   }
+
+  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
 }
