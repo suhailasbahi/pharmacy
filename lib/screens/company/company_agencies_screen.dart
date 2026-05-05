@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/dummy_products.dart';
 import '../../models/agency_model.dart';
 import '../../models/product_model.dart';
 import '../../widgets/company_product_card.dart';
+import '../../services/auth_service.dart';
 
 class CompanyAgenciesScreen extends StatefulWidget {
   @override
@@ -73,17 +75,20 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
     return Scaffold(
       appBar: AppBar(
         title: Text('الوكالات (${agencies.length})'),
         centerTitle: true,
         backgroundColor: Colors.teal,
+        automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _addAgency,
-            tooltip: 'إضافة وكالة',
-          ),
+          if (auth.canManageBranches)
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: _addAgency,
+              tooltip: 'إضافة وكالة',
+            ),
         ],
       ),
       body: agencies.isEmpty
@@ -135,7 +140,7 @@ class AgencyCard extends StatelessWidget {
           agency.name,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        subtitle: Text('${agency.products.length} منتج'),
+        subtitle: Text('${agency.products.length} منتج', style: const TextStyle(fontSize: 12)),
         children: [
           Padding(
             padding: const EdgeInsets.all(12),

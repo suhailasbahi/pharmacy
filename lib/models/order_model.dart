@@ -10,12 +10,14 @@ class OrderModel {
   final String companyName;
   final List<OrderItem> items;
   final double totalPrice;
-  final String status; // pending, accepted, rejected, shipped, delivered
+  final String status;
   final DateTime date;
-  final String paymentType; // 'cash' or 'credit'
-  final String paymentMethod; // 'transfer', 'wallet', 'cash_on_delivery'
+  final String paymentType;
+  final String paymentMethod;
   final int? creditDays;
   final String? rejectionReason;
+  final String? createdBy;
+  final String? assignedTo;
 
   OrderModel({
     required this.id,
@@ -33,6 +35,8 @@ class OrderModel {
     required this.paymentMethod,
     this.creditDays,
     this.rejectionReason,
+    this.createdBy,
+    this.assignedTo,
   });
 
   String get paymentTypeText => paymentType == 'cash' ? 'نقدي' : 'أجل';
@@ -84,6 +88,8 @@ class OrderModel {
       'paymentMethod': paymentMethod,
       'creditDays': creditDays,
       'rejectionReason': rejectionReason,
+      'createdBy': createdBy,
+      'assignedTo': assignedTo,
     };
   }
 
@@ -104,6 +110,8 @@ class OrderModel {
       paymentMethod: map['paymentMethod'] ?? 'transfer',
       creditDays: map['creditDays'],
       rejectionReason: map['rejectionReason'],
+      createdBy: map['createdBy'],
+      assignedTo: map['assignedTo'],
     );
   }
 }
@@ -113,10 +121,10 @@ class OrderItem {
   final String productName;
   final String scientificName;
   final int quantity;
-  final int quantityInPieces; // total pieces (for display)
-  final String unit; // 'piece' or 'carton'
+  final int quantityInPieces;
+  final String unit;
   final int? piecesPerCarton;
-  final double price; // unit price at time of order
+  final double price;
   final int? bonusReceived;
   final double totalPrice;
 

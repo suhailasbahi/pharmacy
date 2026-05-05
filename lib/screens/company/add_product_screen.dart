@@ -6,6 +6,8 @@ import '../../models/region_pricing.dart';
 import '../../models/bonus_model.dart';
 import '../../models/dummy_products.dart';
 import '../../models/agency_model.dart';
+import 'package:provider/provider.dart';
+import '../../services/auth_service.dart';
 
 class AddProductScreen extends StatefulWidget {
   @override
@@ -79,7 +81,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
     setState(() => _isLoading = true);
-
+      
+    final auth = Provider.of<AuthService>(context, listen: false);
     final newProduct = ProductModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       companyId: 'comp_001',
@@ -103,6 +106,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
       hasOffer: _hasOffer,
       offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
+        createdBy:  auth.currentUserId,
     );
 
     _selectedAgency!.products.add(newProduct);

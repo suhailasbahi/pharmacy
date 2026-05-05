@@ -24,7 +24,7 @@ class ProductDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
-    final bool isCompany = authService.currentUserType == 'company';
+    final isPharmacy = authService.currentUserType == 'pharmacy';
     final cartProvider = Provider.of<CartProvider>(context);
     final isInCart = cartProvider.isInCart(product.id);
     final price = product.getFinalPriceForRegion(regionId);
@@ -37,7 +37,6 @@ class ProductDetailsScreen extends StatelessWidget {
         title: Text(product.name),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        // تم إزالة automaticallyImplyLeading false لإبقاء سهم العودة
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -191,8 +190,8 @@ class ProductDetailsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // إخفاء زر الإضافة إذا كان المستخدم شركة
-                  if (!isCompany)
+                  // إظهار زر الإضافة فقط إذا كان المستخدم صيدلية
+                  if (isPharmacy)
                     SizedBox(
                       width: double.infinity,
                       height: 55,

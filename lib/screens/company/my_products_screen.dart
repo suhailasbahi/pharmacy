@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/dummy_products.dart';
 import '../../models/product_model.dart';
 import '../../models/agency_model.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/category_helpers.dart';
 import 'edit_product_screen.dart';
 
@@ -20,11 +22,16 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   }
 
   void _loadData() {
+    final auth = Provider.of<AuthService>(context, listen: false);
     List<MapEntry<AgencyModel, ProductModel>> entries = [];
     final agencies = dummyAgencies.where((a) => a.companyId == 'comp_001').toList();
     for (var agency in agencies) {
       for (var product in agency.products) {
-        entries.add(MapEntry(agency, product));
+        if (auth.canViewAllProducts) {
+          entries.add(MapEntry(agency, product));
+        } else if (auth.canViewOwnProducts && product.createdBy == auth.currentUserId) {
+          entries.add(MapEntry(agency, product));
+        }
       }
     }
     setState(() {
@@ -51,19 +58,22 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   }
 
   String _getCategoryFromName(String name) {
-    if (name.contains('باراسيتامول') || name.contains('إيبوبروفين') || name.contains('ديكلوفيناك')) return 'مسكنات';
-    else if (name.contains('أموكسيسيلين') || name.contains('أزيثروميسين')) return 'مضادات حيوية';
+    if (name.contains('بنادول') || name.contains('بروفين') || name.contains('ديكلوفيناك')) return 'مسكنات';
+    else if (name.contains('أموكسيل') || name.contains('زيتروماكس')) return 'مضادات حيوية';
     else if (name.contains('فيتامين')) return 'فيتامينات';
     else return 'أدوية';
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
     return Scaffold(
-      appBar: AppBar(title: Text('منتجاتي (${productEntries.length})'),
-                     automaticallyImplyLeading: false,
-                     centerTitle: true, backgroundColor: Colors.teal),
-
+      appBar: AppBar(
+        title: Text('منتجاتي (${productEntries.length})'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+          automaticallyImplyLeading: false,
+      ),
       body: productEntries.isEmpty
           ? Center(
               child: Column(
@@ -73,7 +83,8 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                   const SizedBox(height: 16),
                   Text('لا توجد منتجات', style: TextStyle(fontSize: 18, color: Colors.grey)),
                   const SizedBox(height: 8),
-                  Text('أضف منتج جديد من علامة التبويب إضافة دواء', style: TextStyle(color: Colors.grey)),
+                  if (auth.canAddProduct)
+                    Text('أضف منتج جديد من علامة التبويب إضافة دواء', style: TextStyle(color: Colors.grey)),
                 ],
               ),
             )
@@ -147,32 +158,34 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
                         ),
                         Column(
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () => _editProduct(agency, product),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (_) => AlertDialog(
-                                    title: const Text('حذف المنتج'),
-                                    content: Text('هل أنت متأكد من حذف ${product.name}؟'),
-                                    actions: [
-                                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.pop(context);
-                                          _deleteProduct(agency, product);
-                                        },
-                                        child: const Text('حذف', style: TextStyle(color: Colors.red)),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
+                            if (auth.canEditProduct)
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () => _editProduct(agency, product),
+                              ),
+                            if (auth.canDeleteProduct)
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text('حذف المنتج'),
+                                      content: Text('هل أنت متأكد من حذف ${product.name}؟'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            _deleteProduct(agency, product);
+                                          },
+                                          child: const Text('حذف', style: TextStyle(color: Colors.red)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
                           ],
                         ),
                       ],

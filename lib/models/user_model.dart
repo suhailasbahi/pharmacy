@@ -3,13 +3,17 @@ class UserModel {
   final String email;
   final String name;
   final String phone;
-  final String userType; // 'pharmacy' or 'company'
-  final String licenseNumber;
+  final String userType; // 'company', 'pharmacy', 'sub_account'
+  final String? parentCompanyId;
+  final String? branchId;
+  final String roleId;
+  final List<String> customPermissions;
+  final bool isActive;
+  final DateTime createdAt;
+  final String? licenseNumber;
   final String? licenseImageUrl;
   final bool isApproved;
-  final String regionId; // selected region during registration
   final String? address;
-  final DateTime createdAt;
 
   UserModel({
     required this.id,
@@ -17,12 +21,16 @@ class UserModel {
     required this.name,
     required this.phone,
     required this.userType,
-    required this.licenseNumber,
-    this.licenseImageUrl,
-    required this.isApproved,
-    required this.regionId,
-    this.address,
+    this.parentCompanyId,
+    this.branchId,
+    required this.roleId,
+    this.customPermissions = const [],
+    this.isActive = true,
     required this.createdAt,
+    this.licenseNumber,
+    this.licenseImageUrl,
+    this.isApproved = false,
+    this.address,
   });
 
   Map<String, dynamic> toMap() {
@@ -31,12 +39,16 @@ class UserModel {
       'name': name,
       'phone': phone,
       'userType': userType,
+      'parentCompanyId': parentCompanyId,
+      'branchId': branchId,
+      'roleId': roleId,
+      'customPermissions': customPermissions,
+      'isActive': isActive,
+      'createdAt': createdAt.toIso8601String(),
       'licenseNumber': licenseNumber,
       'licenseImageUrl': licenseImageUrl,
       'isApproved': isApproved,
-      'regionId': regionId,
       'address': address,
-      'createdAt': createdAt,
     };
   }
 
@@ -47,12 +59,16 @@ class UserModel {
       name: map['name'] ?? '',
       phone: map['phone'] ?? '',
       userType: map['userType'] ?? '',
-      licenseNumber: map['licenseNumber'] ?? '',
+      parentCompanyId: map['parentCompanyId'],
+      branchId: map['branchId'],
+      roleId: map['roleId'] ?? '',
+      customPermissions: List<String>.from(map['customPermissions'] ?? []),
+      isActive: map['isActive'] ?? true,
+      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
+      licenseNumber: map['licenseNumber'],
       licenseImageUrl: map['licenseImageUrl'],
       isApproved: map['isApproved'] ?? false,
-      regionId: map['regionId'] ?? 'sanaa',
       address: map['address'],
-      createdAt: (map['createdAt'] as DateTime?) ?? DateTime.now(),
     );
   }
 }

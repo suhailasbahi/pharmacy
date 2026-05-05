@@ -6,7 +6,7 @@ class ProductModel {
   final String companyId;
   final String companyName;
   final String name;
-  final String scientificName; // used for similar products
+  final String scientificName;
   final String concentration;
   final int stockQuantity;
   final bool requiresCooling;
@@ -14,16 +14,17 @@ class ProductModel {
   final DateTime expiryDate;
   final bool isActive;
   final DateTime createdAt;
-  final List<RegionPricing> regionPrices; // prices per region
+  final List<RegionPricing> regionPrices;
   final BonusModel? bonusCash;
   final BonusModel? bonusCredit;
   final double pricePerPiece;
   final double pricePerCarton;
   final int piecesPerCarton;
-  final String defaultUnit; // 'piece' or 'carton'
+  final String defaultUnit;
   final int minOrderQuantity;
   final bool hasOffer;
   final double? offerPrice;
+  final String? createdBy;
 
   ProductModel({
     required this.id,
@@ -48,8 +49,10 @@ class ProductModel {
     this.minOrderQuantity = 1,
     this.hasOffer = false,
     this.offerPrice,
+    this.createdBy,
   });
 
+  // ========== الدوال المطلوبة ==========
   double getBasePriceForRegion(String regionId) {
     final pricing = regionPrices.firstWhere(
       (p) => p.regionId == regionId,
@@ -74,12 +77,6 @@ class ProductModel {
     return pricing.currency;
   }
 
-  double get unitPrice {
-    return defaultUnit == 'piece' ? pricePerPiece : pricePerCarton;
-  }
-
-  String get unitText => defaultUnit == 'piece' ? 'باكيت' : 'كرتون';
-
   String get currencySymbol {
     final firstCurrency = regionPrices.isNotEmpty ? regionPrices.first.currency : 'yemen';
     switch (firstCurrency) {
@@ -90,6 +87,7 @@ class ProductModel {
     }
   }
 
+  // باقي الدوال (toMap, fromMap) كما هي موجودة مسبقاً
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -114,6 +112,7 @@ class ProductModel {
       'minOrderQuantity': minOrderQuantity,
       'hasOffer': hasOffer,
       'offerPrice': offerPrice,
+      'createdBy': createdBy,
     };
   }
 
@@ -131,10 +130,7 @@ class ProductModel {
       expiryDate: DateTime.parse(map['expiryDate'] ?? DateTime.now().toIso8601String()),
       isActive: map['isActive'] ?? true,
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
-      regionPrices: (map['regionPrices'] as List?)
-              ?.map((p) => RegionPricing.fromMap(p as Map<String, dynamic>))
-              .toList() ??
-          [],
+      regionPrices: (map['regionPrices'] as List?)?.map((p) => RegionPricing.fromMap(p)).toList() ?? [],
       bonusCash: map['bonusCash'] != null ? BonusModel.fromMap(map['bonusCash']) : null,
       bonusCredit: map['bonusCredit'] != null ? BonusModel.fromMap(map['bonusCredit']) : null,
       pricePerPiece: (map['pricePerPiece'] ?? 0).toDouble(),
@@ -144,6 +140,7 @@ class ProductModel {
       minOrderQuantity: map['minOrderQuantity'] ?? 1,
       hasOffer: map['hasOffer'] ?? false,
       offerPrice: map['offerPrice']?.toDouble(),
+      createdBy: map['createdBy'],
     );
   }
 }

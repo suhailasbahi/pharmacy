@@ -26,6 +26,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         title: const Text('حسابات العملاء'),
         centerTitle: true,
         backgroundColor: Colors.teal,
+          automaticallyImplyLeading: false,
       ),
       body: Consumer<AccountProvider>(
         builder: (context, provider, child) {

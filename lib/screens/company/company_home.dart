@@ -11,6 +11,9 @@ import '../../services/auth_service.dart';
 import '../../screens/splash_screen.dart';
 import 'customers_screen.dart';
 import 'company_detailed_reports_screen.dart';
+import 'branches_management_screen.dart';
+import 'roles_management_screen.dart';
+import 'manage_sub_accounts_screen.dart';
 
 class CompanyHomeScreen extends StatefulWidget {
   const CompanyHomeScreen({Key? key}) : super(key: key);
@@ -56,46 +59,52 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.inventory),
-              title: const Text('منتجاتي'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => _currentIndex = 0);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.shopping_bag),
-              title: const Text('الطلبات'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => _currentIndex = 1);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.add_box),
-              title: const Text('إضافة دواء'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => _currentIndex = 2);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.store),
-              title: const Text('الوكالات'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => _currentIndex = 3);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.dashboard),
-              title: const Text('لوحة التحكم'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => _currentIndex = 4);
-              },
-            ),
+            // ========== القسم الأساسي (حسب الصلاحيات) ==========
+            if (auth.canViewAllProducts || auth.canViewOwnProducts)
+              ListTile(
+                leading: const Icon(Icons.inventory),
+                title: const Text('منتجاتي'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _currentIndex = 0);
+                },
+              ),
+            if (auth.canViewAllOrders || auth.canViewOwnOrders)
+              ListTile(
+                leading: const Icon(Icons.shopping_bag),
+                title: const Text('الطلبات'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _currentIndex = 1);
+                },
+              ),
+            if (auth.canAddProduct)
+              ListTile(
+                leading: const Icon(Icons.add_box),
+                title: const Text('إضافة دواء'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _currentIndex = 2);
+                },
+              ),
+            if (auth.canManageBranches)
+              ListTile(
+                leading: const Icon(Icons.store),
+                title: const Text('الوكالات'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _currentIndex = 3);
+                },
+              ),
+            if (auth.canViewAllReports || auth.canViewSalesReports)
+              ListTile(
+                leading: const Icon(Icons.dashboard),
+                title: const Text('لوحة التحكم'),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => _currentIndex = 4);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.person),
               title: const Text('حسابي'),
@@ -105,32 +114,73 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
               },
             ),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.bar_chart, color: Colors.teal),
-              title: const Text('التقارير والإحصائيات'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportsScreen()));
-              },
-            ),
+            // ========== التقارير والإحصائيات ==========
+            if (auth.canViewAllReports || auth.canViewSalesReports || auth.canViewFinancialReports)
               ListTile(
-  leading: const Icon(Icons.assessment, color: Colors.teal),
-  title: const Text('تقارير تفصيلية'),
-  onTap: () {
-    Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const CompanyDetailedReportsScreen()));
-  },
-),
+                leading: const Icon(Icons.bar_chart, color: Colors.teal),
+                title: const Text('التقارير والإحصائيات'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) =>  ReportsScreen()));
+                },
+              ),
+            if (auth.canViewSalesReports)
+              ListTile(
+                leading: const Icon(Icons.assessment, color: Colors.teal),
+                title: const Text('تقارير تفصيلية'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) =>  CompanyDetailedReportsScreen()));
+                },
+              ),
             const Divider(),
-            ListTile(
-              leading: const Icon(Icons.people, color: Colors.teal),
-              title: const Text('إدارة العملاء'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomersScreen()));
-              },
-            ),
+            // ========== إدارة العملاء ==========
+            if (auth.canViewAllCustomers || auth.canViewOwnCustomers || auth.canAddCustomer || auth.canEditCustomer)
+              ListTile(
+                leading: const Icon(Icons.people, color: Colors.teal),
+                title: const Text('إدارة العملاء'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) =>  CustomersScreen()));
+                },
+              ),
+            // ========== إدارة النظام (فقط للمالك أو من لديه الصلاحيات) ==========
+            if (auth.canManageBranches || auth.canManageRoles || auth.canManageUsers) ...[
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('إدارة النظام', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+              if (auth.canManageBranches)
+                ListTile(
+                  leading: const Icon(Icons.location_city),
+                  title: const Text('إدارة الفروع'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) =>  BranchesManagementScreen()));
+                  },
+                ),
+              if (auth.canManageRoles)
+                ListTile(
+                  leading: const Icon(Icons.security),
+                  title: const Text('إدارة الأدوار'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) =>  RolesManagementScreen()));
+                  },
+                ),
+              if (auth.canManageUsers)
+                ListTile(
+                  leading: const Icon(Icons.people),
+                  title: const Text('إدارة المستخدمين'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) =>  ManageSubAccountsScreen()));
+                  },
+                ),
+            ],
             const Divider(),
+            // ========== تسجيل الخروج ==========
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.red),
               title: const Text('تسجيل الخروج', style: TextStyle(color: Colors.red)),
@@ -138,7 +188,7 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
                 await auth.logout();
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (_) => SplashScreen()),
+                  MaterialPageRoute(builder: (_) =>  SplashScreen()),
                 );
               },
             ),

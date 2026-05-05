@@ -43,38 +43,58 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
     return Scaffold(
-      appBar: AppBar(title: Text('لوحة التحكم'), centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(
+        title: const Text('لوحة التحكم'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+      ),
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
           final orders = filteredOrders;
           return Column(
             children: [
               Container(
-                padding: EdgeInsets.all(12),
+                padding: const EdgeInsets.all(12),
                 child: GridView.count(
-                  shrinkWrap: true, physics: NeverScrollableScrollPhysics(), crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.5,
                   children: [
-                    _buildStatCard('إجمالي الطلبات', totalOrders.toString(), Icons.shopping_bag, Colors.teal),
-                    _buildStatCard('الإيرادات', '${totalRevenue.toStringAsFixed(2)} جنيه', Icons.attach_money, Colors.green),
-                    _buildStatCard('قيد المراجعة', pendingCount.toString(), Icons.hourglass_empty, Colors.orange),
-                    _buildStatCard('تم الشحن', shippedCount.toString(), Icons.local_shipping, Colors.purple),
-                    _buildStatCard('تم التسليم', deliveredCount.toString(), Icons.check_circle, Colors.green),
-                    _buildStatCard('مرفوض', rejectedCount.toString(), Icons.cancel, Colors.red),
+                    if (auth.canViewAllReports || auth.canViewSalesReports)
+                      _buildStatCard('إجمالي الطلبات', totalOrders.toString(), Icons.shopping_bag, Colors.teal),
+                    if (auth.canViewFinancialReports)
+                      _buildStatCard('الإيرادات', '${totalRevenue.toStringAsFixed(2)}', Icons.attach_money, Colors.green),
+                    if (auth.canViewSalesReports)
+                      _buildStatCard('قيد المراجعة', pendingCount.toString(), Icons.hourglass_empty, Colors.orange),
+                    if (auth.canViewInventoryReports)
+                      _buildStatCard('تم الشحن', shippedCount.toString(), Icons.local_shipping, Colors.purple),
+                    if (auth.canViewSalesReports)
+                      _buildStatCard('تم التسليم', deliveredCount.toString(), Icons.check_circle, Colors.green),
+                    if (auth.canViewSalesReports)
+                      _buildStatCard('مرفوض', rejectedCount.toString(), Icons.cancel, Colors.red),
                   ],
                 ),
               ),
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
                   children: [
                     Expanded(
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: _selectedFilter, isExpanded: true,
+                            value: _selectedFilter,
+                            isExpanded: true,
                             items: const [
                               DropdownMenuItem(value: 'all', child: Text('جميع الطلبات')),
                               DropdownMenuItem(value: 'pending', child: Text('قيد المراجعة')),
@@ -88,15 +108,24 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
                         ),
                       ),
                     ),
-                    SizedBox(width: 12),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: _selectedCity, isExpanded: true,
-                            items: availableCities.map((city) => DropdownMenuItem(value: city, child: Text(city == 'all' ? 'جميع المدن' : city))).toList(),
+                            value: _selectedCity,
+                            isExpanded: true,
+                            items: availableCities.map((city) {
+                              return DropdownMenuItem(
+                                value: city,
+                                child: Text(city == 'all' ? 'جميع المدن' : city),
+                              );
+                            }).toList(),
                             onChanged: (value) => setState(() => _selectedCity = value!),
                           ),
                         ),
@@ -107,8 +136,21 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
               ),
               Expanded(
                 child: orders.isEmpty
-                    ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey), SizedBox(height: 16), Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey))]))
-                    : ListView.builder(padding: EdgeInsets.all(12), itemCount: orders.length, itemBuilder: (context, index) => DashboardOrderCard(order: orders[index])),
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: orders.length,
+                        itemBuilder: (context, index) => DashboardOrderCard(order: orders[index]),
+                      ),
               ),
             ],
           );
@@ -119,14 +161,19 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Card(
-      elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: EdgeInsets.all(12),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 28, color: color), SizedBox(height: 8),
-          Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
-        ]),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28, color: color),
+            const SizedBox(height: 8),
+            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+            Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }
@@ -170,7 +217,7 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
     final accountProvider = Provider.of<AccountProvider>(context, listen: false);
     orderProvider.acceptOrder(widget.order.id, accountProvider);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
+      const SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
     );
   }
 
@@ -178,39 +225,7 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
-    );
-  }
-
-  void _showRejectDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('رفض الطلب', style: TextStyle(color: Colors.red)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('يرجى كتابة سبب الرفض:'),
-            SizedBox(height: 16),
-            TextField(controller: _rejectReasonController, decoration: InputDecoration(hintText: 'مثال: المنتج غير متوفر'), maxLines: 3),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              if (_rejectReasonController.text.isNotEmpty) {
-                _rejectOrder();
-                Navigator.pop(ctx);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('يرجى كتابة سبب الرفض'), backgroundColor: Colors.orange));
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text('تأكيد الرفض'),
-          ),
-        ],
-      ),
+      const SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
     );
   }
 
@@ -218,7 +233,7 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     orderProvider.updateOrderStatus(widget.order.id, 'shipped');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
+      const SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
     );
   }
 
@@ -226,78 +241,186 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     orderProvider.updateOrderStatus(widget.order.id, 'delivered');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
+      const SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
+    );
+  }
+
+  void _showRejectDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('رفض الطلب', style: TextStyle(color: Colors.red)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('يرجى كتابة سبب الرفض:'),
+            const SizedBox(height: 16),
+            TextField(controller: _rejectReasonController, decoration: const InputDecoration(hintText: 'مثال: المنتج غير متوفر'), maxLines: 3),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              if (_rejectReasonController.text.isNotEmpty) {
+                _rejectOrder();
+                Navigator.pop(ctx);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('يرجى كتابة سبب الرفض'), backgroundColor: Colors.orange),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('تأكيد الرفض'),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
     return Card(
-      margin: EdgeInsets.only(bottom: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           InkWell(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('طلب #${widget.order.id.substring(0, 8)}', style: TextStyle(fontWeight: FontWeight.bold)),
-                        SizedBox(height: 4), Text('صيدلية: ${widget.order.pharmacyName}', style: TextStyle(fontSize: 12)),
-                        Text('المدينة: ${widget.order.pharmacyCity}', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                        Text('نوع الدفع: ${widget.order.paymentTypeText} - ${widget.order.paymentMethodText}', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      ])),
-                      Container(padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5), decoration: BoxDecoration(color: _getStatusColor(widget.order.status).withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                        child: Text(_getStatusText(widget.order.status), style: TextStyle(fontSize: 12, color: _getStatusColor(widget.order.status)))),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('#${widget.order.id.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 4),
+                            Text('صيدلية: ${widget.order.pharmacyName}', style: const TextStyle(fontSize: 12)),
+                            Text('المدينة: ${widget.order.pharmacyCity}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text('نوع الدفع: ${widget.order.paymentTypeText} - ${widget.order.paymentMethodText}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(widget.order.status).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _getStatusText(widget.order.status),
+                          style: TextStyle(fontSize: 12, color: _getStatusColor(widget.order.status)),
+                        ),
+                      ),
                     ],
                   ),
-                  SizedBox(height: 12),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${widget.order.items.length} منتجات', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text('${widget.order.totalPrice.toStringAsFixed(2)} جنيه', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                      Text('${widget.order.items.length} منتجات', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(
+                        '${widget.order.totalPrice.toStringAsFixed(2)} جنيه',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                      ),
                     ],
                   ),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
-                    Text(_isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ]),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
+                      Text(
+                        _isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ),
           if (_isExpanded)
-            Container(padding: EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.vertical(bottom: Radius.circular(12))),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
-                ListView.builder(shrinkWrap: true, physics: NeverScrollableScrollPhysics(), itemCount: widget.order.items.length,
-                  itemBuilder: (ctx, idx) {
-                    final item = widget.order.items[idx];
-                    return Padding(padding: EdgeInsets.symmetric(vertical: 4),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('${item.productName} (${item.quantity} ${item.unit == 'carton' ? 'كرتون' : 'باكيت'}) - ${item.quantityInPieces} باكيت', style: TextStyle(fontSize: 14)),
-                          Text('${(item.price * item.quantity).toStringAsFixed(2)} جنيه'),
-                        ],
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: widget.order.items.length,
+                    itemBuilder: (ctx, idx) {
+                      final item = widget.order.items[idx];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${item.productName} (${item.quantity} ${item.unit == 'carton' ? 'كرتون' : 'باكيت'}) - ${item.quantityInPieces} باكيت',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            Text('${(item.price * item.quantity).toStringAsFixed(2)} جنيه'),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(),
+                  if (widget.order.status == 'pending')
+                    Row(
+                      children: [
+                        if (auth.canRejectOrder)
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _showRejectDialog,
+                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                              child: const Text('رفض', style: TextStyle(color: Colors.red)),
+                            ),
+                          ),
+                        if (auth.canRejectOrder && auth.canAcceptOrder) const SizedBox(width: 8),
+                        if (auth.canAcceptOrder)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _acceptOrder,
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                              child: const Text('قبول'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  if (widget.order.status == 'accepted' && auth.canShipOrder)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _updateShipping,
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+                        child: const Text('تأكيد الشحن'),
                       ),
-                    );
-                  },
-                ),
-                Divider(),
-                if (widget.order.status == 'pending')
-                  Row(children: [
-                    Expanded(child: OutlinedButton(onPressed: _showRejectDialog, style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.red)), child: Text('رفض', style: TextStyle(color: Colors.red)))),
-                    SizedBox(width: 8),
-                    Expanded(child: ElevatedButton(onPressed: _acceptOrder, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal), child: Text('قبول'))),
-                  ]),
-                if (widget.order.status == 'accepted')
-                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _updateShipping, style: ElevatedButton.styleFrom(backgroundColor: Colors.purple), child: Text('تأكيد الشحن'))),
-                if (widget.order.status == 'shipped')
-                  SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _updateDelivered, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: Text('تسليم الطلب'))),
-              ]),
+                    ),
+                  if (widget.order.status == 'shipped' && auth.canDeliverOrder)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _updateDelivered,
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                        child: const Text('تسليم الطلب'),
+                      ),
+                    ),
+                ],
+              ),
             ),
         ],
       ),
