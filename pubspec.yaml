@@ -1,5 +1,5 @@
-name: pharma
-description: تطبيق بيع وشراء الأدوية بالجملة
+name: app
+description: A new Flutter project.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,14 +9,20 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # UI & State Management
   provider: ^6.1.1
   shared_preferences: ^2.2.2
   image_picker: ^1.0.4
+
+  # Firebase
   firebase_core: ^2.25.0
   firebase_auth: ^4.17.0
   cloud_firestore: ^4.15.0
-  firebase_storage: ^11.6.0
-  
+
+  # Other utilities
+  cupertino_icons: ^1.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -24,3 +30,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Cairo
+      fonts:
+        - asset: assets/fonts/Cairo-Regular.ttf
+        - asset: assets/fonts/Cairo-Bold.ttf
+          weight: 700
+  assets:
+    - assets/images/

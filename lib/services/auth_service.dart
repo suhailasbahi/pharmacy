@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Fixed import
 import '../models/permissions.dart';
 import '../models/user_model.dart';
 
@@ -61,7 +61,8 @@ class AuthService extends ChangeNotifier {
   bool get canAdjustInventory => isCompanyOwner;
 
   // ========== دوال الفرع ==========
-  bool get isBranchManager => _currentRoleId == 'role_branch_manager' && _currentBranchId != null;
+  bool get isBranchManager =>
+      _currentRoleId == 'role_branch_manager' && _currentBranchId != null;
   String? getEffectiveBranchId() => isBranchManager ? _currentBranchId : null;
 
   // ========== Guest mode ==========
@@ -88,12 +89,14 @@ class AuthService extends ChangeNotifier {
         password: password,
       );
       String uid = userCredential.user!.uid;
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
+      DocumentSnapshot doc =
+          await _firestore.collection('users').doc(uid).get();
       if (!doc.exists) throw Exception('المستخدم غير موجود في قاعدة البيانات');
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
       _currentUserModel = UserModel.fromMap(uid, data);
       _currentUserType = _currentUserModel!.userType;
-      _currentCompanyId = _currentUserModel!.parentCompanyId ?? _currentUserModel!.companyId;
+      _currentCompanyId =
+          _currentUserModel!.parentCompanyId ?? _currentUserModel!.companyId;
       _currentPharmacyName = _currentUserModel!.name;
       _currentRegionId = _currentUserModel!.address;
       _currentRoleId = _currentUserModel!.roleId;
@@ -120,7 +123,8 @@ class AuthService extends ChangeNotifier {
     String? address,
   }) async {
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential =
+          await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -168,7 +172,8 @@ class AuthService extends ChangeNotifier {
   // ========== مساعدة ==========
   Future<List<String>> _getRolePermissions(String roleId) async {
     try {
-      DocumentSnapshot roleDoc = await _firestore.collection('roles').doc(roleId).get();
+      DocumentSnapshot roleDoc =
+          await _firestore.collection('roles').doc(roleId).get();
       if (roleDoc.exists) {
         Map<String, dynamic> data = roleDoc.data() as Map<String, dynamic>;
         return List<String>.from(data['defaultPermissions'] ?? []);
