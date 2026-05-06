@@ -18,6 +18,7 @@ class OrderModel {
   final String? rejectionReason;
   final String? createdBy;
   final String? assignedTo;
+  final String? branchId;  // جديد
 
   OrderModel({
     required this.id,
@@ -37,6 +38,7 @@ class OrderModel {
     this.rejectionReason,
     this.createdBy,
     this.assignedTo,
+    this.branchId,
   });
 
   String get paymentTypeText => paymentType == 'cash' ? 'نقدي' : 'أجل';
@@ -90,6 +92,7 @@ class OrderModel {
       'rejectionReason': rejectionReason,
       'createdBy': createdBy,
       'assignedTo': assignedTo,
+      'branchId': branchId,
     };
   }
 
@@ -112,6 +115,7 @@ class OrderModel {
       rejectionReason: map['rejectionReason'],
       createdBy: map['createdBy'],
       assignedTo: map['assignedTo'],
+      branchId: map['branchId'],
     );
   }
 }

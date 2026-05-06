@@ -14,7 +14,6 @@ class ProductSalesByRegionScreen extends StatefulWidget {
 
 class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen> {
   String? _selectedProductId;
-  List<String> _productNames = [];
   Map<String, String> _productIdToName = {};
   DateTimeRange? _dateRange;
 
@@ -29,7 +28,6 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
       for (var product in agency.products) {
         if (!_productIdToName.containsKey(product.id)) {
           _productIdToName[product.id] = product.name;
-          _productNames.add(product.name);
         }
       }
     }
@@ -48,19 +46,19 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
 
   @override
   Widget build(BuildContext context) {
-    final companyId = Provider.of<AuthService>(context).currentCompanyId ?? 'comp_001';
-    List<OrderModel> orders = Provider.of<OrderProvider>(context)
-        .getOrdersForCompany(companyId);
+    final auth = Provider.of<AuthService>(context);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    List<OrderModel> filteredOrders = Provider.of<OrderProvider>(context)
+        .getOrdersForCompany(companyId, branchId: auth.getEffectiveBranchId());
 
     if (_dateRange != null) {
-      orders = orders.where((o) =>
+      filteredOrders = filteredOrders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
 
     Map<String, Map<String, double>> salesByProductRegion = {};
-
-    for (var order in orders) {
+    for (var order in filteredOrders) {
       final region = order.pharmacyCity;
       for (var item in order.items) {
         final productName = item.productName;
@@ -73,12 +71,10 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
     if (_selectedProductId != null && _productIdToName.containsKey(_selectedProductId)) {
       selectedProductName = _productIdToName[_selectedProductId]!;
     }
-
     Map<String, double> regionSales = {};
     if (selectedProductName.isNotEmpty && salesByProductRegion.containsKey(selectedProductName)) {
       regionSales = salesByProductRegion[selectedProductName]!;
     }
-
     final entries = regionSales.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
 
@@ -87,13 +83,7 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
         title: const Text('مبيعات صنف حسب المحافظة'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
-          ),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange)],
       ),
       body: Column(
         children: [
@@ -105,10 +95,7 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(
-                    onPressed: () => setState(() => _dateRange = null),
-                    child: const Text('إلغاء التصفية'),
-                  ),
+                  TextButton(onPressed: () => setState(() => _dateRange = null), child: const Text('إلغاء التصفية')),
                 ],
               ),
             ),
@@ -126,7 +113,7 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
           if (selectedProductName.isNotEmpty)
             Expanded(
               child: entries.isEmpty
-                  ? const Center(child: Text('لا توجد مبيعات لهذا المنتج في الفترة المحددة'))
+                  ? const Center(child: Text('لا توجد مبيعات لهذا المنتج'))
                   : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(

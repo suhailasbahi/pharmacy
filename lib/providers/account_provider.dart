@@ -7,6 +7,11 @@ class AccountProvider extends ChangeNotifier {
 
   List<SupplierAccount> get suppliers => _suppliers;
   List<CustomerAccount> get customers => _customers;
+    // داخل كلاس AccountProvider، أضف:
+
+List<CustomerAccount> getCustomersForBranch(String branchId) {
+  return _customers.where((c) => c.branchId == branchId).toList();
+}
 
   // ========== إدارة الموردين (للصيدلية) ==========
   void addSupplier(SupplierAccount supplier) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
 import '../../models/account_model.dart';
+import 'supplier_statement_screen.dart';
 
 class SuppliersScreen extends StatefulWidget {
   const SuppliersScreen({Key? key}) : super(key: key);
@@ -91,6 +92,13 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                                 label: const Text('حذف'),
                                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                               ),
+IconButton(
+  icon: const Icon(Icons.receipt, color: Colors.teal),
+  onPressed: () {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => SupplierStatementScreen(supplier: supplier)));
+  },
+  tooltip: 'كشف حساب',
+), 
                             ],
                           ),
                           const SizedBox(height: 12),

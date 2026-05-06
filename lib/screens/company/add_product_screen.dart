@@ -107,6 +107,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       hasOffer: _hasOffer,
       offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
         createdBy:  auth.currentUserId,
+        branchId: auth.getEffectiveBranchId(),
     );
 
     _selectedAgency!.products.add(newProduct);

@@ -23,8 +23,9 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   }
 
   void _loadRegions() {
+    final auth = Provider.of<AuthService>(context, listen: false);
     final orders = Provider.of<OrderProvider>(context, listen: false)
-        .getOrdersForCompany(Provider.of<AuthService>(context, listen: false).currentCompanyId ?? 'comp_001');
+        .getOrdersForCompany(auth.currentCompanyId ?? 'comp_001', branchId: auth.getEffectiveBranchId());
     regions = ['all', ...orders.map((o) => o.pharmacyCity).toSet().toList()];
   }
 
@@ -40,20 +41,20 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final companyId = Provider.of<AuthService>(context).currentCompanyId ?? 'comp_001';
-    List<OrderModel> orders = Provider.of<OrderProvider>(context)
-        .getOrdersForCompany(companyId);
+    final auth = Provider.of<AuthService>(context);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    List<OrderModel> filteredOrders = Provider.of<OrderProvider>(context)
+        .getOrdersForCompany(companyId, branchId: auth.getEffectiveBranchId());
 
     if (_dateRange != null) {
-      orders = orders.where((o) =>
+      filteredOrders = filteredOrders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
 
     double totalCash = 0, totalCredit = 0;
     Map<String, double> cashByRegion = {}, creditByRegion = {};
-
-    for (var order in orders) {
+    for (var order in filteredOrders) {
       final region = order.pharmacyCity;
       final amount = order.totalPrice;
       if (order.paymentType == 'cash') {
@@ -64,11 +65,9 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         creditByRegion[region] = (creditByRegion[region] ?? 0) + amount;
       }
     }
-
     double total = totalCash + totalCredit;
     double cashPercent = total == 0 ? 0 : (totalCash / total) * 100;
     double creditPercent = total == 0 ? 0 : (totalCredit / total) * 100;
-
     List<String> displayRegions = _selectedRegion == 'all'
         ? [...cashByRegion.keys.toSet(), ...creditByRegion.keys.toSet()].toSet().toList()
         : [_selectedRegion];
@@ -78,13 +77,7 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         title: const Text('تفصيل المبيعات (نقدي / آجل)'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
-          ),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange)],
       ),
       body: Column(
         children: [
@@ -96,10 +89,7 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(
-                    onPressed: () => setState(() => _dateRange = null),
-                    child: const Text('إلغاء التصفية'),
-                  ),
+                  TextButton(onPressed: () => setState(() => _dateRange = null), child: const Text('إلغاء التصفية')),
                 ],
               ),
             ),
@@ -167,10 +157,7 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     return Container(
       width: 120,
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),

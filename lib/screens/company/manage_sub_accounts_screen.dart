@@ -25,27 +25,33 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-    if (!auth.canManageUsers) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
-        body: const Center(child: Text('ليس لديك صلاحية لعرض هذه الصفحة')),
-      );
-    }
-
+Widget build(BuildContext context) {
+  final auth = Provider.of<AuthService>(context);
+  if (!auth.canManageUsers) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('إدارة الحسابات الفرعية'),
-        centerTitle: true,
-        backgroundColor: Colors.teal,
-      ),
-      body: Consumer2<UserManagementProvider, RoleProvider>(
-        builder: (context, userProvider, roleProvider, child) {
-          final users = userProvider.subAccounts;
-          if (users.isEmpty) {
-            return const Center(child: Text('لا توجد حسابات فرعية'));
-          }
+      appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
+      body: const Center(child: Text('ليس لديك صلاحية لعرض هذه الصفحة')),
+    );
+  }
+
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text('إدارة الحسابات الفرعية'),
+      centerTitle: true,
+      backgroundColor: Colors.teal,
+    ),
+    body: Consumer2<UserManagementProvider, RoleProvider>(
+      builder: (context, userProvider, roleProvider, child) {
+        List<UserModel> users = userProvider.subAccounts;
+        // تصفية حسب الفرع إذا كان المستخدم مدير فرع
+        final effectiveBranchId = auth.getEffectiveBranchId();
+        if (effectiveBranchId != null) {
+          users = users.where((u) => u.branchId == effectiveBranchId).toList();
+        }
+        if (users.isEmpty) {
+          return const Center(child: Text('لا توجد حسابات فرعية'));
+        }
+        
           return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: users.length,

@@ -20,14 +20,17 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
         title: const Text('طلبات الشراء'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-          automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false,
       ),
       body: Consumer<OrderProvider>(
         builder: (context, orderProvider, child) {
-          List<OrderModel> orders = orderProvider.getOrdersForCompany(companyId);
-          if (!auth.canViewAllOrders && auth.canViewOwnOrders) {
-            orders = orders.where((o) => 
-              o.createdBy == auth.currentUserId || 
+          List<OrderModel> orders = orderProvider.getOrdersForCompany(
+            companyId,
+            branchId: auth.getEffectiveBranchId(),
+          );
+          if (!auth.isCompanyOwner && !auth.isBranchManager && auth.canViewOwnOrders) {
+            orders = orders.where((o) =>
+              o.createdBy == auth.currentUserId ||
               o.assignedTo == auth.currentUserId
             ).toList();
           }

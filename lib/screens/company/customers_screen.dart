@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
 import '../../models/account_model.dart';
+import '../../services/auth_service.dart';
+import 'customer_statement_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({Key? key}) : super(key: key);
@@ -21,16 +23,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('حسابات العملاء'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-          automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false,
       ),
       body: Consumer<AccountProvider>(
         builder: (context, provider, child) {
-          final customers = provider.customers;
+          List<CustomerAccount> customers = provider.customers;
+          final effectiveBranchId = auth.getEffectiveBranchId();
+          if (effectiveBranchId != null) {
+            customers = customers.where((c) => c.branchId == effectiveBranchId).toList();
+          }
           if (customers.isEmpty) {
             return Center(
               child: Column(
@@ -91,6 +98,14 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 label: const Text('حذف'),
                                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                               ),
+                                
+IconButton(
+  icon: const Icon(Icons.receipt, color: Colors.teal),
+  onPressed: () {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerStatementScreen(customer: customer)));
+  },
+  tooltip: 'كشف حساب',
+),
                             ],
                           ),
                           const SizedBox(height: 12),
@@ -151,6 +166,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 phone: phoneController.text.trim(),
                 balance: 0,
                 createdAt: DateTime.now(),
+                branchId: null,
               );
               Provider.of<AccountProvider>(context, listen: false).addCustomer(customer);
               Navigator.pop(ctx);
@@ -189,6 +205,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 balance: customer.balance,
                 createdAt: customer.createdAt,
                 transactions: customer.transactions,
+                branchId: customer.branchId,
               );
               Provider.of<AccountProvider>(context, listen: false).updateCustomer(updated);
               Navigator.pop(ctx);
@@ -245,8 +262,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
               if (amount <= 0) return;
               final transaction = Transaction(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
-                amount: amount, 
-                  date: DateTime.now(),
+                amount: amount,
+                date: DateTime.now(),
                 note: noteController.text.trim(),
                 type: 'payment',
               );

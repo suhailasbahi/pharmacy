@@ -22,22 +22,33 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   }
 
   void _loadData() {
-    final auth = Provider.of<AuthService>(context, listen: false);
-    List<MapEntry<AgencyModel, ProductModel>> entries = [];
-    final agencies = dummyAgencies.where((a) => a.companyId == 'comp_001').toList();
-    for (var agency in agencies) {
-      for (var product in agency.products) {
-        if (auth.canViewAllProducts) {
-          entries.add(MapEntry(agency, product));
-        } else if (auth.canViewOwnProducts && product.createdBy == auth.currentUserId) {
-          entries.add(MapEntry(agency, product));
-        }
+  final auth = Provider.of<AuthService>(context, listen: false);
+  List<MapEntry<AgencyModel, ProductModel>> entries = [];
+  final agencies = dummyAgencies.where((a) => a.companyId == 'comp_001').toList();
+  final effectiveBranchId = auth.getEffectiveBranchId();
+  
+  for (var agency in agencies) {
+    for (var product in agency.products) {
+      // تصفية حسب الصلاحيات + الفرع
+      bool canView = false;
+      if (auth.canViewAllProducts) {
+        canView = true;
+      } else if (auth.canViewOwnProducts && product.createdBy == auth.currentUserId) {
+        canView = true;
+      }
+      // إذا كان مدير فرع، نضيف شرط أن المنتج يتبع فرعه (يجب أن يكون product.branchId موجوداً)
+      if (effectiveBranchId != null && product.branchId != effectiveBranchId) {
+        canView = false;
+      }
+      if (canView) {
+        entries.add(MapEntry(agency, product));
       }
     }
-    setState(() {
-      productEntries = entries;
-    });
   }
+  setState(() {
+    productEntries = entries;
+  });
+}
 
   void _deleteProduct(AgencyModel agency, ProductModel product) {
     agency.products.removeWhere((p) => p.id == product.id);

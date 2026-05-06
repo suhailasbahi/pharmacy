@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/order_model.dart';
 import '../models/cart_item.dart';
-import '../models/account_model.dart'; // أضف هذا السطر
+import '../models/account_model.dart';
 import 'account_provider.dart';
 
 class OrderProvider extends ChangeNotifier {
@@ -55,6 +55,7 @@ class OrderProvider extends ChangeNotifier {
         paymentType: paymentType,
         paymentMethod: paymentMethod,
         creditDays: creditDays,
+        branchId: null, // يمكن تعيينه لاحقاً
       );
       _orders.insert(0, order);
     }
@@ -66,7 +67,6 @@ class OrderProvider extends ChangeNotifier {
     if (index != -1) {
       final order = _orders[index];
       if (order.status == 'pending') {
-        // تحديث حالة الطلب إلى accepted
         final updatedOrder = OrderModel(
           id: order.id,
           pharmacyId: order.pharmacyId,
@@ -82,12 +82,14 @@ class OrderProvider extends ChangeNotifier {
           paymentType: order.paymentType,
           paymentMethod: order.paymentMethod,
           creditDays: order.creditDays,
+          createdBy: order.createdBy,
+          assignedTo: order.assignedTo,
+          branchId: order.branchId,
         );
         _orders[index] = updatedOrder;
         
-        // إذا كان الدفع آجلاً، نضيف المعاملة إلى حسابات العملاء والموردين
         if (order.paymentType == 'credit') {
-          // 1. إضافة معاملة للعميل (الصيدلية) في جهة الشركة
+          // إضافة العميل والمورد كما هو...
           CustomerAccount? existingCustomer;
           try {
             existingCustomer = accountProvider.customers.firstWhere(
@@ -116,11 +118,11 @@ class OrderProvider extends ChangeNotifier {
               balance: order.totalPrice,
               createdAt: DateTime.now(),
               transactions: [transaction],
+              branchId: order.branchId,
             );
             accountProvider.addCustomer(newCustomer);
           }
           
-          // 2. إضافة معاملة للمورد (الشركة) في جهة الصيدلية
           SupplierAccount? existingSupplier;
           try {
             existingSupplier = accountProvider.suppliers.firstWhere(
@@ -152,7 +154,6 @@ class OrderProvider extends ChangeNotifier {
             accountProvider.addSupplier(newSupplier);
           }
         }
-        
         notifyListeners();
       }
     }
@@ -178,6 +179,9 @@ class OrderProvider extends ChangeNotifier {
         paymentMethod: old.paymentMethod,
         creditDays: old.creditDays,
         rejectionReason: rejectionReason,
+        createdBy: old.createdBy,
+        assignedTo: old.assignedTo,
+        branchId: old.branchId,
       );
       notifyListeners();
     }
@@ -203,6 +207,9 @@ class OrderProvider extends ChangeNotifier {
         paymentMethod: old.paymentMethod,
         creditDays: old.creditDays,
         rejectionReason: rejectionReason,
+        createdBy: old.createdBy,
+        assignedTo: old.assignedTo,
+        branchId: old.branchId,
       );
       notifyListeners();
     }
@@ -213,11 +220,19 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<OrderModel> getOrdersForCompany(String companyId) {
-    return _orders.where((order) => order.companyId == companyId).toList();
+  List<OrderModel> getOrdersForCompany(String companyId, {String? branchId}) {
+    var result = _orders.where((order) => order.companyId == companyId).toList();
+    if (branchId != null && branchId.isNotEmpty) {
+      result = result.where((order) => order.branchId == branchId).toList();
+    }
+    return result;
   }
 
   List<OrderModel> getOrdersForPharmacy(String pharmacyId) {
     return _orders.where((order) => order.pharmacyId == pharmacyId).toList();
+  }
+
+  List<OrderModel> getOrdersForBranch(String branchId) {
+    return _orders.where((order) => order.branchId == branchId).toList();
   }
 }

@@ -56,15 +56,19 @@ class SupplierAccount {
   }
 }
 
+// أضف الحقل branchId داخل كلاس CustomerAccount:
+
 class CustomerAccount {
   final String id;
-  final String pharmacyId; // معرف الصيدلية
+  final String pharmacyId;
   final String pharmacyName;
   final String phone;
-  final double balance; // رصيد مستحق للشركة على الصيدلية (موجب يعني على الصيدلية)
+  final double balance;
   final DateTime createdAt;
   final List<Transaction> transactions;
-
+  final String? branchId;  // جديد
+  
+    
   CustomerAccount({
     required this.id,
     required this.pharmacyId,
@@ -73,8 +77,10 @@ class CustomerAccount {
     this.balance = 0,
     required this.createdAt,
     this.transactions = const [],
+    this.branchId,
   });
 
+  // عدّل toMap و fromMap
   Map<String, dynamic> toMap() {
     return {
       'pharmacyId': pharmacyId,
@@ -83,6 +89,8 @@ class CustomerAccount {
       'balance': balance,
       'createdAt': createdAt.toIso8601String(),
       'transactions': transactions.map((t) => t.toMap()).toList(),
+      'branchId': branchId,
+        
     };
   }
 
@@ -94,14 +102,12 @@ class CustomerAccount {
       phone: map['phone'] ?? '',
       balance: (map['balance'] ?? 0).toDouble(),
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
-      transactions: (map['transactions'] as List?)
-              ?.map((t) => Transaction.fromMap(t))
-              .toList() ??
-          [],
+      transactions: (map['transactions'] as List?)?.map((t) => Transaction.fromMap(t)).toList() ?? [],
+      branchId: map['branchId'],
     );
   }
 
-  CustomerAccount copyWith({double? balance, List<Transaction>? transactions}) {
+  CustomerAccount copyWith({double? balance, List<Transaction>? transactions, String? branchId}) {
     return CustomerAccount(
       id: id,
       pharmacyId: pharmacyId,
@@ -110,10 +116,12 @@ class CustomerAccount {
       balance: balance ?? this.balance,
       createdAt: createdAt,
       transactions: transactions ?? this.transactions,
+      branchId: branchId ?? this.branchId,
     );
   }
 }
-
+        
+        
 class Transaction {
   final String id;
   final double amount; // موجب: دفع (تسديد)، سالب: شراء بالدين (التزام)

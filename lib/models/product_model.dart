@@ -25,6 +25,7 @@ class ProductModel {
   final bool hasOffer;
   final double? offerPrice;
   final String? createdBy;
+  final String? branchId;
 
   ProductModel({
     required this.id,
@@ -50,6 +51,7 @@ class ProductModel {
     this.hasOffer = false,
     this.offerPrice,
     this.createdBy,
+    this.branchId,
   });
 
   // ========== الدوال المطلوبة ==========
@@ -113,6 +115,7 @@ class ProductModel {
       'hasOffer': hasOffer,
       'offerPrice': offerPrice,
       'createdBy': createdBy,
+      'branchId' : branchId,
     };
   }
 
@@ -141,6 +144,7 @@ class ProductModel {
       hasOffer: map['hasOffer'] ?? false,
       offerPrice: map['offerPrice']?.toDouble(),
       createdBy: map['createdBy'],
+      branchId: map['branchId'],
     );
   }
 }

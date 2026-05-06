@@ -63,6 +63,12 @@ class AuthService extends ChangeNotifier {
   bool get canManageRoles => hasPermission('roles:manage');
   bool get canViewInventory => hasPermission('inventory:view');
   bool get canAdjustInventory => hasPermission('inventory:adjust');
+    bool get isBranchManager => _currentRoleId == 'role_branch_manager' && _currentBranchId != null;
+
+String? getEffectiveBranchId() {
+  if (isBranchManager) return _currentBranchId;
+  return null; // المالك أو أي دور آخر يرى كل شيء
+}
 
   void enterAsGuest(String regionId) {
     _isGuest = true;

@@ -23,8 +23,9 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
   }
 
   void _loadRegions() {
+    final auth = Provider.of<AuthService>(context, listen: false);
     final orders = Provider.of<OrderProvider>(context, listen: false)
-        .getOrdersForCompany(Provider.of<AuthService>(context, listen: false).currentCompanyId ?? 'comp_001');
+        .getOrdersForCompany(auth.currentCompanyId ?? 'comp_001', branchId: auth.getEffectiveBranchId());
     regions = ['all', ...orders.map((o) => o.pharmacyCity).toSet().toList()];
   }
 
@@ -40,13 +41,13 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final companyId = Provider.of<AuthService>(context).currentCompanyId ?? 'comp_001';
-    List<OrderModel> orders = Provider.of<OrderProvider>(context)
-        .getOrdersForCompany(companyId);
+    final auth = Provider.of<AuthService>(context);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    List<OrderModel> filteredOrders = Provider.of<OrderProvider>(context)
+        .getOrdersForCompany(companyId, branchId: auth.getEffectiveBranchId());
 
-    // تطبيق فلترة التاريخ
     if (_dateRange != null) {
-      orders = orders.where((order) =>
+      filteredOrders = filteredOrders.where((order) =>
           order.date.isAfter(_dateRange!.start) &&
           order.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
@@ -54,11 +55,10 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
     Map<String, double> salesByRegion = {};
     Map<String, Map<String, double>> cashCreditByRegion = {};
 
-    for (var order in orders) {
+    for (var order in filteredOrders) {
       final region = order.pharmacyCity;
       final amount = order.totalPrice;
       salesByRegion[region] = (salesByRegion[region] ?? 0) + amount;
-
       cashCreditByRegion.putIfAbsent(region, () => {'cash': 0.0, 'credit': 0.0});
       if (order.paymentType == 'cash') {
         cashCreditByRegion[region]!['cash'] = (cashCreditByRegion[region]!['cash'] ?? 0) + amount;
@@ -69,7 +69,6 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
 
     List<MapEntry<String, double>> entries = salesByRegion.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
-
     if (_selectedRegion != 'all') {
       entries = entries.where((e) => e.key == _selectedRegion).toList();
     }
@@ -79,13 +78,7 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
         title: const Text('المبيعات حسب المحافظة'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
-          ),
-        ],
+        actions: [IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange)],
       ),
       body: Column(
         children: [
@@ -97,10 +90,7 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(
-                    onPressed: () => setState(() => _dateRange = null),
-                    child: const Text('إلغاء التصفية'),
-                  ),
+                  TextButton(onPressed: () => setState(() => _dateRange = null), child: const Text('إلغاء التصفية')),
                 ],
               ),
             ),
