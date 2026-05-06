@@ -14,6 +14,7 @@ class UserModel {
   final String? licenseImageUrl;
   final bool isApproved;
   final String? address;
+  final String? companyId;
 
   UserModel({
     required this.id,
@@ -31,6 +32,7 @@ class UserModel {
     this.licenseImageUrl,
     this.isApproved = false,
     this.address,
+    this.companyId,
   });
 
   Map<String, dynamic> toMap() {
@@ -69,6 +71,7 @@ class UserModel {
       licenseImageUrl: map['licenseImageUrl'],
       isApproved: map['isApproved'] ?? false,
       address: map['address'],
+      companyId: map['companyId']
     );
   }
 }
