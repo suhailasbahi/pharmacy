@@ -102,6 +102,108 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     );
   }
 
+  void _editAgency(AgencyModel agency) {
+    final nameController = TextEditingController(text: agency.name);
+    bool isUpdating = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('تعديل الوكالة'),
+            content: TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'اسم الوكالة'),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: isUpdating
+                    ? null
+                    : () async {
+                        if (nameController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('يرجى إدخال اسم الوكالة'), backgroundColor: Colors.orange),
+                          );
+                          return;
+                        }
+                        setDialogState(() => isUpdating = true);
+                        try {
+                          final updatedAgency = AgencyModel(
+                            id: agency.id,
+                            name: nameController.text.trim(),
+                            companyId: agency.companyId,
+                            companyName: agency.companyName,
+                            products: agency.products, // الحفاظ على المنتجات
+                            isActive: agency.isActive,
+                          );
+                          await _firestore.collection('agencies').doc(agency.id).update(updatedAgency.toMap());
+                          Navigator.pop(ctx);
+                          await _refresh();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم تعديل الوكالة بنجاح'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          setDialogState(() => isUpdating = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
+                child: const Text('حفظ'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _deleteAgency(AgencyModel agency) async {
+    if (agency.products.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يمكن حذف وكالة تحتوي على منتجات. قم بحذف المنتجات أولاً.'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    // تأكيد الحذف
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الوكالة'),
+        content: Text('هل أنت متأكد من حذف الوكالة "${agency.name}"؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await _firestore.collection('agencies').doc(agency.id).delete();
+      await _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حذف الوكالة بنجاح'), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ أثناء الحذف: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
@@ -133,7 +235,11 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
             : ListView.builder(
                 padding: const EdgeInsets.all(12),
                 itemCount: _agencies.length,
-                itemBuilder: (context, index) => AgencyCard(agency: _agencies[index]),
+                itemBuilder: (context, index) => AgencyCard(
+                  agency: _agencies[index],
+                  onEdit: () => _editAgency(_agencies[index]),
+                  onDelete: () => _deleteAgency(_agencies[index]),
+                ),
               ),
       ),
     );
@@ -142,7 +248,10 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
 
 class AgencyCard extends StatelessWidget {
   final AgencyModel agency;
-  const AgencyCard({Key? key, required this.agency}) : super(key: key);
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const AgencyCard({Key? key, required this.agency, required this.onEdit, required this.onDelete}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -158,6 +267,21 @@ class AgencyCard extends StatelessWidget {
         ),
         title: Text(agency.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         subtitle: Text('${agency.products.length} منتج', style: const TextStyle(fontSize: 12)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
+              onPressed: onEdit,
+              tooltip: 'تعديل الوكالة',
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+              onPressed: onDelete,
+              tooltip: 'حذف الوكالة',
+            ),
+          ],
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
