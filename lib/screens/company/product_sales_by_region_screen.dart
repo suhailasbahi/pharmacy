@@ -16,11 +16,14 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
   String? _selectedProductId;
   Map<String, String> _productIdToName = {};
   DateTimeRange? _dateRange;
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _loadData();
   }
 
   void _loadProducts() {
@@ -31,7 +34,28 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
         }
       }
     }
-    setState(() {});
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final branchId = auth.getEffectiveBranchId();
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    var orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
+    setState(() {
+      _orders = orders;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadData();
   }
 
   Future<void> _selectDateRange() async {
@@ -41,24 +65,23 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
-    if (picked != null) setState(() => _dateRange = picked);
+    if (picked != null) {
+      setState(() => _dateRange = picked);
+      await _loadData();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    List<OrderModel> filteredOrders = Provider.of<OrderProvider>(context)
-        .getOrdersForCompany(companyId, branchId: auth.getEffectiveBranchId());
-
-    if (_dateRange != null) {
-      filteredOrders = filteredOrders.where((o) =>
-          o.date.isAfter(_dateRange!.start) &&
-          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    if (_isLoading) {
+      return  Scaffold(
+        appBar: AppBar(title: Text('مبيعات صنف حسب المحافظة'), centerTitle: true, backgroundColor: Colors.teal),
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     Map<String, Map<String, double>> salesByProductRegion = {};
-    for (var order in filteredOrders) {
+    for (var order in _orders) {
       final region = order.pharmacyCity;
       for (var item in order.items) {
         final productName = item.productName;
@@ -83,54 +106,65 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
         title: const Text('مبيعات صنف حسب المحافظة'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        actions: [IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange)],
+        actions: [
+          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
+        ],
       ),
-      body: Column(
-        children: [
-          if (_dateRange != null)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.grey.shade100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(onPressed: () => setState(() => _dateRange = null), child: const Text('إلغاء التصفية')),
-                ],
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: Column(
+          children: [
+            if (_dateRange != null)
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.grey.shade100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                    TextButton(
+                      onPressed: () async {
+                        setState(() => _dateRange = null);
+                        await _loadData();
+                      },
+                      child: const Text('إلغاء التصفية'),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: DropdownButtonFormField<String>(
+                hint: const Text('اختر المنتج'),
+                value: _selectedProductId,
+                items: _productIdToName.entries.map((entry) {
+                  return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedProductId = val),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: DropdownButtonFormField<String>(
-              hint: const Text('اختر المنتج'),
-              value: _selectedProductId,
-              items: _productIdToName.entries.map((entry) {
-                return DropdownMenuItem(value: entry.key, child: Text(entry.value));
-              }).toList(),
-              onChanged: (val) => setState(() => _selectedProductId = val),
-            ),
-          ),
-          if (selectedProductName.isNotEmpty)
-            Expanded(
-              child: entries.isEmpty
-                  ? const Center(child: Text('لا توجد مبيعات لهذا المنتج'))
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('المحافظة')),
-                          DataColumn(label: Text('إجمالي المبيعات')),
-                        ],
-                        rows: entries.map((entry) {
-                          return DataRow(cells: [
-                            DataCell(Text(entry.key)),
-                            DataCell(Text('${entry.value.toStringAsFixed(2)}')),
-                          ]);
-                        }).toList(),
+            if (selectedProductName.isNotEmpty)
+              Expanded(
+                child: entries.isEmpty
+                    ? const Center(child: Text('لا توجد مبيعات لهذا المنتج'))
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('المحافظة')),
+                            DataColumn(label: Text('إجمالي المبيعات')),
+                          ],
+                          rows: entries.map((entry) {
+                            return DataRow(cells: [
+                              DataCell(Text(entry.key)),
+                              DataCell(Text('${entry.value.toStringAsFixed(2)}')),
+                            ]);
+                          }).toList(),
+                        ),
                       ),
-                    ),
-            ),
-        ],
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -14,14 +14,16 @@ class ProductPurchasesScreen extends StatefulWidget {
 
 class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
   String? _selectedProductId;
-  List<String> _productNames = [];
   Map<String, String> _productIdToName = {};
   DateTimeRange? _dateRange;
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _loadData();
   }
 
   void _loadProducts() {
@@ -29,11 +31,30 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
       for (var product in agency.products) {
         if (!_productIdToName.containsKey(product.id)) {
           _productIdToName[product.id] = product.name;
-          _productNames.add(product.name);
         }
       }
     }
-    setState(() {});
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final pharmacyId = auth.currentUserId ?? 'pharmacy_demo_123';
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    List<OrderModel> orders = await orderProvider.getOrdersForPharmacy(pharmacyId);
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
+    setState(() {
+      _orders = orders;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadData();
   }
 
   Future<void> _selectDateRange() async {
@@ -43,24 +64,24 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
-    if (picked != null) setState(() => _dateRange = picked);
+    if (picked != null) {
+      setState(() => _dateRange = picked);
+      await _loadData();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pharmacyId = Provider.of<AuthService>(context).currentUserId ?? 'pharmacy_demo_123';
-    List<OrderModel> orders = Provider.of<OrderProvider>(context)
-        .getOrdersForPharmacy(pharmacyId);
-
-    if (_dateRange != null) {
-      orders = orders.where((o) =>
-          o.date.isAfter(_dateRange!.start) &&
-          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('مشتريات صنف حسب المورد'), centerTitle: true, backgroundColor: Colors.teal),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     Map<String, Map<String, double>> purchasesByProductSupplier = {};
 
-    for (var order in orders) {
+    for (var order in _orders) {
       final supplier = order.companyName;
       for (var item in order.items) {
         final productName = item.productName;
@@ -78,7 +99,6 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
     if (selectedProductName.isNotEmpty && purchasesByProductSupplier.containsKey(selectedProductName)) {
       supplierPurchases = purchasesByProductSupplier[selectedProductName]!;
     }
-
     final entries = supplierPurchases.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
 
@@ -88,62 +108,64 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
-          ),
+          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
         ],
       ),
-      body: Column(
-        children: [
-          if (_dateRange != null)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.grey.shade100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(
-                    onPressed: () => setState(() => _dateRange = null),
-                    child: const Text('إلغاء التصفية'),
-                  ),
-                ],
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: Column(
+          children: [
+            if (_dateRange != null)
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.grey.shade100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                    TextButton(
+                      onPressed: () async {
+                        setState(() => _dateRange = null);
+                        await _loadData();
+                      },
+                      child: const Text('إلغاء التصفية'),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: DropdownButtonFormField<String>(
+                hint: const Text('اختر المنتج'),
+                value: _selectedProductId,
+                items: _productIdToName.entries.map((entry) {
+                  return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                }).toList(),
+                onChanged: (val) => setState(() => _selectedProductId = val),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: DropdownButtonFormField<String>(
-              hint: const Text('اختر المنتج'),
-              value: _selectedProductId,
-              items: _productIdToName.entries.map((entry) {
-                return DropdownMenuItem(value: entry.key, child: Text(entry.value));
-              }).toList(),
-              onChanged: (val) => setState(() => _selectedProductId = val),
-            ),
-          ),
-          if (selectedProductName.isNotEmpty)
-            Expanded(
-              child: entries.isEmpty
-                  ? const Center(child: Text('لا توجد مشتريات لهذا المنتج'))
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columns: const [
-                          DataColumn(label: Text('المورد')),
-                          DataColumn(label: Text('إجمالي المشتريات')),
-                        ],
-                        rows: entries.map((entry) {
-                          return DataRow(cells: [
-                            DataCell(Text(entry.key)),
-                            DataCell(Text('${entry.value.toStringAsFixed(2)}')),
-                          ]);
-                        }).toList(),
+            if (selectedProductName.isNotEmpty)
+              Expanded(
+                child: entries.isEmpty
+                    ? const Center(child: Text('لا توجد مشتريات لهذا المنتج'))
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: DataTable(
+                          columns: const [
+                            DataColumn(label: Text('المورد')),
+                            DataColumn(label: Text('إجمالي المشتريات')),
+                          ],
+                          rows: entries.map((entry) {
+                            return DataRow(cells: [
+                              DataCell(Text(entry.key)),
+                              DataCell(Text('${entry.value.toStringAsFixed(2)}')),
+                            ]);
+                          }).toList(),
+                        ),
                       ),
-                    ),
-            ),
-        ],
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -11,10 +11,35 @@ class CompanyOrdersScreen extends StatefulWidget {
 }
 
 class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final branchId = auth.getEffectiveBranchId();
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    setState(() {
+      _orders = orders;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadOrders();
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
     return Scaffold(
       appBar: AppBar(
         title: const Text('طلبات الشراء'),
@@ -22,36 +47,20 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
         backgroundColor: Colors.teal,
         automaticallyImplyLeading: false,
       ),
-      body: Consumer<OrderProvider>(
-        builder: (context, orderProvider, child) {
-          List<OrderModel> orders = orderProvider.getOrdersForCompany(
-            companyId,
-            branchId: auth.getEffectiveBranchId(),
-          );
-          if (!auth.isCompanyOwner && !auth.isBranchManager && auth.canViewOwnOrders) {
-            orders = orders.where((o) =>
-              o.createdBy == auth.currentUserId ||
-              o.assignedTo == auth.currentUserId
-            ).toList();
-          }
-          if (orders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  const Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                ],
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: orders.length,
-            itemBuilder: (context, index) => CompanyOrderCard(order: orders[index]),
-          );
-        },
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _orders.isEmpty
+                ? const Center(child: Text('لا توجد طلبات'))
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: _orders.length,
+                    itemBuilder: (context, index) => CompanyOrderCard(
+                      order: _orders[index],
+                      onStatusChanged: _refresh,
+                    ),
+                  ),
       ),
     );
   }
@@ -59,7 +68,9 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
 
 class CompanyOrderCard extends StatefulWidget {
   final OrderModel order;
-  const CompanyOrderCard({Key? key, required this.order}) : super(key: key);
+  final VoidCallback onStatusChanged;
+  const CompanyOrderCard({Key? key, required this.order, required this.onStatusChanged}) : super(key: key);
+
   @override
   State<CompanyOrderCard> createState() => _CompanyOrderCardState();
 }
@@ -90,40 +101,45 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
     }
   }
 
-  void _acceptOrder() {
+  Future<void> _acceptOrder() async {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
     final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    orderProvider.acceptOrder(widget.order.id, accountProvider);
+    await orderProvider.acceptOrder(widget.order.id, accountProvider);
+    widget.onStatusChanged();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
     );
   }
 
-  void _rejectOrder() {
+  Future<void> _rejectOrder() async {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
+    await orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
+    widget.onStatusChanged();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
     );
   }
 
-  void _updateShipping() {
+  Future<void> _updateShipping() async {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    orderProvider.updateOrderStatus(widget.order.id, 'shipped');
+    await orderProvider.updateOrderStatus(widget.order.id, 'shipped');
+    widget.onStatusChanged();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
     );
   }
 
-  void _updateDelivered() {
+  Future<void> _updateDelivered() async {
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    orderProvider.updateOrderStatus(widget.order.id, 'delivered');
+    await orderProvider.updateOrderStatus(widget.order.id, 'delivered');
+    widget.onStatusChanged();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
     );
   }
 
   void _showRejectDialog() {
+    _rejectReasonController.clear();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -141,8 +157,8 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
           ElevatedButton(
             onPressed: () {
               if (_rejectReasonController.text.isNotEmpty) {
-                _rejectOrder();
                 Navigator.pop(ctx);
+                _rejectOrder();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('يرجى كتابة سبب الرفض'), backgroundColor: Colors.orange),

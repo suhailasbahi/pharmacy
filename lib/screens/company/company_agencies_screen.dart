@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/dummy_products.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/agency_model.dart';
 import '../../models/product_model.dart';
 import '../../widgets/company_product_card.dart';
@@ -12,7 +12,9 @@ class CompanyAgenciesScreen extends StatefulWidget {
 }
 
 class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
-  List<AgencyModel> agencies = [];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  List<AgencyModel> _agencies = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -20,55 +22,82 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     _loadAgencies();
   }
 
-  void _loadAgencies() {
+  Future<void> _loadAgencies() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final snapshot = await _firestore.collection('agencies').where('companyId', isEqualTo: companyId).get();
+    final agencies = snapshot.docs.map((doc) => AgencyModel.fromMap(doc.id, doc.data())).toList();
     setState(() {
-      agencies = dummyAgencies.where((a) => a.companyId == 'comp_001').toList();
+      _agencies = agencies;
+      _isLoading = false;
     });
+  }
+
+  Future<void> _refresh() async {
+    await _loadAgencies();
   }
 
   void _addAgency() {
     final nameController = TextEditingController();
+    bool isAdding = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('إضافة وكالة جديدة'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(labelText: 'اسم الوكالة'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('إلغاء'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('يرجى إدخال اسم الوكالة'), backgroundColor: Colors.orange),
-                );
-                return;
-              }
-              final newAgency = AgencyModel(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                name: nameController.text.trim(),
-                companyId: 'comp_001',
-                companyName: 'شركة الأدوية العربية',
-                products: [],
-                isActive: true,
-              );
-              setState(() {
-                agencies.add(newAgency);
-                dummyAgencies.add(newAgency);
-              });
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم إضافة الوكالة بنجاح'), backgroundColor: Colors.green),
-              );
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('إضافة وكالة جديدة'),
+            content: TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'اسم الوكالة'),
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: isAdding
+                    ? null
+                    : () async {
+                        if (nameController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('يرجى إدخال اسم الوكالة'), backgroundColor: Colors.orange),
+                          );
+                          return;
+                        }
+                        setDialogState(() => isAdding = true);
+                        try {
+                          final auth = Provider.of<AuthService>(context, listen: false);
+                          final newAgency = AgencyModel(
+                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            name: nameController.text.trim(),
+                            companyId: auth.currentCompanyId ?? 'comp_001',
+                            companyName: 'شركة الأدوية العربية',
+                            products: [],
+                            isActive: true,
+                          );
+                          await _firestore.collection('agencies').doc(newAgency.id).set(newAgency.toMap());
+                          Navigator.pop(ctx);
+                          await _refresh();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم إضافة الوكالة بنجاح'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          setDialogState(() => isAdding = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
+                child: const Text('إضافة'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -76,9 +105,15 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('الوكالات'), centerTitle: true, backgroundColor: Colors.teal),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
-        title: Text('الوكالات (${agencies.length})'),
+        title: Text('الوكالات (${_agencies.length})'),
         centerTitle: true,
         backgroundColor: Colors.teal,
         automaticallyImplyLeading: false,
@@ -91,34 +126,22 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
             ),
         ],
       ),
-      body: agencies.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.store, size: 80, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  const Text('لا توجد وكالات', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  const Text('أضف وكالة جديدة بالضغط على زر +', style: TextStyle(color: Colors.grey)),
-                ],
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _agencies.isEmpty
+            ? const Center(child: Text('لا توجد وكالات'))
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: _agencies.length,
+                itemBuilder: (context, index) => AgencyCard(agency: _agencies[index]),
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: agencies.length,
-              itemBuilder: (context, index) {
-                final agency = agencies[index];
-                return AgencyCard(agency: agency);
-              },
-            ),
+      ),
     );
   }
 }
 
 class AgencyCard extends StatelessWidget {
   final AgencyModel agency;
-
   const AgencyCard({Key? key, required this.agency}) : super(key: key);
 
   @override
@@ -130,16 +153,10 @@ class AgencyCard extends StatelessWidget {
         leading: Container(
           width: 50,
           height: 50,
-          decoration: BoxDecoration(
-            color: Colors.teal.shade100,
-            borderRadius: BorderRadius.circular(10),
-          ),
+          decoration: BoxDecoration(color: Colors.teal.shade100, borderRadius: BorderRadius.circular(10)),
           child: const Icon(Icons.store, color: Colors.teal),
         ),
-        title: Text(
-          agency.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
+        title: Text(agency.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         subtitle: Text('${agency.products.length} منتج', style: const TextStyle(fontSize: 12)),
         children: [
           Padding(
@@ -164,12 +181,7 @@ class AgencyCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 agency.products.isEmpty
-                    ? const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Text('لا توجد منتجات في هذه الوكالة', style: TextStyle(color: Colors.grey)),
-                        ),
-                      )
+                    ? const Center(child: Text('لا توجد منتجات في هذه الوكالة', style: TextStyle(color: Colors.grey)))
                     : GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -180,10 +192,7 @@ class AgencyCard extends StatelessWidget {
                           mainAxisSpacing: 12,
                         ),
                         itemCount: agency.products.length,
-                        itemBuilder: (context, index) {
-                          final product = agency.products[index];
-                          return CompanyProductCard(product: product);
-                        },
+                        itemBuilder: (context, index) => CompanyProductCard(product: agency.products[index]),
                       ),
               ],
             ),

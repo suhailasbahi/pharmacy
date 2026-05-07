@@ -8,15 +8,15 @@ class SupplierStatementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transactions = List<Transaction>.from(supplier.transactions)
+    final transactions = List<LedgerTransaction>.from(supplier.transactions)
       ..sort((a, b) => a.date.compareTo(b.date));
 
     double runningBalance = 0;
     List<Map<String, dynamic>> statementRows = [];
 
     for (var t in transactions) {
-      double debit = 0; // مدين (ما يزيد التزام الصيدلية تجاه المورد)
-      double credit = 0; // دائن (ما يقلل الالتزام - تسديد)
+      double debit = 0;
+      double credit = 0;
       if (t.type == 'purchase') {
         debit = t.amount;
         runningBalance += t.amount;
@@ -55,9 +55,9 @@ class SupplierStatementScreen extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _infoCard('إجمالي المشتريات', 
+                _infoCard('إجمالي المشتريات',
                     supplier.transactions.where((t) => t.type == 'purchase').fold(0.0, (s, t) => s + t.amount).toStringAsFixed(2)),
-                _infoCard('إجمالي المدفوعات', 
+                _infoCard('إجمالي المدفوعات',
                     supplier.transactions.where((t) => t.type == 'payment').fold(0.0, (s, t) => s + t.amount).toStringAsFixed(2)),
                 _infoCard('الرصيد الحالي', supplier.balance.toStringAsFixed(2)),
               ],

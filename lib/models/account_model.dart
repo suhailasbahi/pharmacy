@@ -3,9 +3,9 @@ class SupplierAccount {
   final String name;
   final String phone;
   final String? email;
-  final double balance; // رصيد مستحق للصيدلية (موجب يعني للصيدلية على المورد، سالب يعني للصيدلية)
+  final double balance;
   final DateTime createdAt;
-  final List<Transaction> transactions;
+  final List<LedgerTransaction> transactions;
 
   SupplierAccount({
     required this.id,
@@ -37,13 +37,13 @@ class SupplierAccount {
       balance: (map['balance'] ?? 0).toDouble(),
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
       transactions: (map['transactions'] as List?)
-              ?.map((t) => Transaction.fromMap(t))
+              ?.map((t) => LedgerTransaction.fromMap(t))
               .toList() ??
           [],
     );
   }
 
-  SupplierAccount copyWith({double? balance, List<Transaction>? transactions}) {
+  SupplierAccount copyWith({double? balance, List<LedgerTransaction>? transactions}) {
     return SupplierAccount(
       id: id,
       name: name,
@@ -56,8 +56,6 @@ class SupplierAccount {
   }
 }
 
-// أضف الحقل branchId داخل كلاس CustomerAccount:
-
 class CustomerAccount {
   final String id;
   final String pharmacyId;
@@ -65,10 +63,9 @@ class CustomerAccount {
   final String phone;
   final double balance;
   final DateTime createdAt;
-  final List<Transaction> transactions;
-  final String? branchId;  // جديد
-  
-    
+  final List<LedgerTransaction> transactions;
+  final String? branchId;
+
   CustomerAccount({
     required this.id,
     required this.pharmacyId,
@@ -80,7 +77,6 @@ class CustomerAccount {
     this.branchId,
   });
 
-  // عدّل toMap و fromMap
   Map<String, dynamic> toMap() {
     return {
       'pharmacyId': pharmacyId,
@@ -90,7 +86,6 @@ class CustomerAccount {
       'createdAt': createdAt.toIso8601String(),
       'transactions': transactions.map((t) => t.toMap()).toList(),
       'branchId': branchId,
-        
     };
   }
 
@@ -102,12 +97,12 @@ class CustomerAccount {
       phone: map['phone'] ?? '',
       balance: (map['balance'] ?? 0).toDouble(),
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
-      transactions: (map['transactions'] as List?)?.map((t) => Transaction.fromMap(t)).toList() ?? [],
+      transactions: (map['transactions'] as List?)?.map((t) => LedgerTransaction.fromMap(t)).toList() ?? [],
       branchId: map['branchId'],
     );
   }
 
-  CustomerAccount copyWith({double? balance, List<Transaction>? transactions, String? branchId}) {
+  CustomerAccount copyWith({double? balance, List<LedgerTransaction>? transactions, String? branchId}) {
     return CustomerAccount(
       id: id,
       pharmacyId: pharmacyId,
@@ -120,16 +115,15 @@ class CustomerAccount {
     );
   }
 }
-        
-        
-class Transaction {
+
+class LedgerTransaction {
   final String id;
-  final double amount; // موجب: دفع (تسديد)، سالب: شراء بالدين (التزام)
+  final double amount;
   final DateTime date;
   final String note;
-  final String type; // 'payment', 'purchase', 'adjustment'
+  final String type;
 
-  Transaction({
+  LedgerTransaction({
     required this.id,
     required this.amount,
     required this.date,
@@ -147,8 +141,8 @@ class Transaction {
     };
   }
 
-  factory Transaction.fromMap(Map<String, dynamic> map) {
-    return Transaction(
+  factory LedgerTransaction.fromMap(Map<String, dynamic> map) {
+    return LedgerTransaction(
       id: map['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
       amount: (map['amount'] ?? 0).toDouble(),
       date: DateTime.parse(map['date'] ?? DateTime.now().toIso8601String()),

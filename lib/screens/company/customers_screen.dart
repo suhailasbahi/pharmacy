@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
-import '../../models/account_model.dart';
 import '../../services/auth_service.dart';
+import '../../models/account_model.dart';
 import 'customer_statement_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
@@ -13,135 +13,36 @@ class CustomersScreen extends StatefulWidget {
 }
 
 class _CustomersScreenState extends State<CustomersScreen> {
+  List<CustomerAccount> _customers = [];
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<AccountProvider>(context, listen: false).loadSampleData();
+    _loadCustomers();
+  }
+
+  Future<void> _loadCustomers() async {
+    setState(() => _isLoading = true);
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    await accountProvider.loadCustomers();
+    final auth = Provider.of<AuthService>(context, listen: false);
+    List<CustomerAccount> customers = accountProvider.customers;
+    final effectiveBranchId = auth.getEffectiveBranchId();
+    if (effectiveBranchId != null) {
+      customers = customers.where((c) => c.branchId == effectiveBranchId).toList();
+    }
+    setState(() {
+      _customers = customers;
+      _isLoading = false;
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('حسابات العملاء'),
-        centerTitle: true,
-        backgroundColor: Colors.teal,
-        automaticallyImplyLeading: false,
-      ),
-      body: Consumer<AccountProvider>(
-        builder: (context, provider, child) {
-          List<CustomerAccount> customers = provider.customers;
-          final effectiveBranchId = auth.getEffectiveBranchId();
-          if (effectiveBranchId != null) {
-            customers = customers.where((c) => c.branchId == effectiveBranchId).toList();
-          }
-          if (customers.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.people, size: 80, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  const Text('لا توجد عملاء', style: TextStyle(fontSize: 18)),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: () => _addCustomer(context),
-                    child: const Text('إضافة عميل'),
-                  ),
-                ],
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: customers.length,
-            itemBuilder: (context, index) {
-              final customer = customers[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                child: ExpansionTile(
-                  title: Text(customer.pharmacyName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('الرصيد: ${customer.balance.toStringAsFixed(2)}'),
-                  leading: CircleAvatar(
-                    backgroundColor: customer.balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
-                    child: Text('${customer.balance.toStringAsFixed(0)}'),
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('الهاتف: ${customer.phone}'),
-                          const Divider(),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              ElevatedButton.icon(
-                                onPressed: () => _receivePayment(context, customer),
-                                icon: const Icon(Icons.payment),
-                                label: const Text('استلام دفعة'),
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () => _editCustomer(context, customer),
-                                icon: const Icon(Icons.edit),
-                                label: const Text('تعديل'),
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () => _deleteCustomer(context, customer),
-                                icon: const Icon(Icons.delete),
-                                label: const Text('حذف'),
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                              ),
-                                
-IconButton(
-  icon: const Icon(Icons.receipt, color: Colors.teal),
-  onPressed: () {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerStatementScreen(customer: customer)));
-  },
-  tooltip: 'كشف حساب',
-),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          const Text('سجل المعاملات:', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: customer.transactions.length,
-                            itemBuilder: (ctx, idx) {
-                              final t = customer.transactions[idx];
-                              return ListTile(
-                                title: Text('${t.amount > 0 ? '+' : ''}${t.amount.toStringAsFixed(2)}'),
-                                subtitle: Text(t.note),
-                                trailing: Text(_formatDate(t.date)),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addCustomer(context),
-        child: const Icon(Icons.add),
-        backgroundColor: Colors.teal,
-      ),
-    );
+  Future<void> _refresh() async {
+    await _loadCustomers();
   }
 
-  void _addCustomer(BuildContext context) {
+  void _addCustomer() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     showDialog(
@@ -158,18 +59,20 @@ IconButton(
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
-              final customer = CustomerAccount(
+            onPressed: () async {
+              final auth = Provider.of<AuthService>(context, listen: false);
+              final newCustomer = CustomerAccount(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 pharmacyId: 'cid_${DateTime.now().millisecondsSinceEpoch}',
                 pharmacyName: nameController.text.trim(),
                 phone: phoneController.text.trim(),
                 balance: 0,
                 createdAt: DateTime.now(),
-                branchId: null,
+                branchId: auth.getEffectiveBranchId(),
               );
-              Provider.of<AccountProvider>(context, listen: false).addCustomer(customer);
+              await Provider.of<AccountProvider>(context, listen: false).addCustomer(newCustomer);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة العميل')));
             },
             child: const Text('إضافة'),
@@ -179,7 +82,7 @@ IconButton(
     );
   }
 
-  void _editCustomer(BuildContext context, CustomerAccount customer) {
+  void _editCustomer(CustomerAccount customer) {
     final nameController = TextEditingController(text: customer.pharmacyName);
     final phoneController = TextEditingController(text: customer.phone);
     showDialog(
@@ -196,7 +99,7 @@ IconButton(
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final updated = CustomerAccount(
                 id: customer.id,
                 pharmacyId: customer.pharmacyId,
@@ -207,8 +110,9 @@ IconButton(
                 transactions: customer.transactions,
                 branchId: customer.branchId,
               );
-              Provider.of<AccountProvider>(context, listen: false).updateCustomer(updated);
+              await Provider.of<AccountProvider>(context, listen: false).updateCustomer(updated);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التعديل')));
             },
             child: const Text('حفظ'),
@@ -218,7 +122,7 @@ IconButton(
     );
   }
 
-  void _deleteCustomer(BuildContext context, CustomerAccount customer) {
+  void _deleteCustomer(CustomerAccount customer) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -227,9 +131,10 @@ IconButton(
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
-              Provider.of<AccountProvider>(context, listen: false).deleteCustomer(customer.id);
+            onPressed: () async {
+              await Provider.of<AccountProvider>(context, listen: false).deleteCustomer(customer.id);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحذف')));
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -240,7 +145,7 @@ IconButton(
     );
   }
 
-  void _receivePayment(BuildContext context, CustomerAccount customer) {
+  void _receivePayment(CustomerAccount customer) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     showDialog(
@@ -257,23 +162,131 @@ IconButton(
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount <= 0) return;
-              final transaction = Transaction(
+              final transaction = LedgerTransaction(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 amount: amount,
                 date: DateTime.now(),
                 note: noteController.text.trim(),
                 type: 'payment',
               );
-              Provider.of<AccountProvider>(context, listen: false).addCustomerTransaction(customer.id, transaction);
+              await Provider.of<AccountProvider>(context, listen: false).addCustomerTransaction(customer.id, transaction);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم استلام مبلغ $amount')));
             },
             child: const Text('تسجيل'),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('حسابات العملاء'),
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('حسابات العملاء'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+        automaticallyImplyLeading: false,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _customers.isEmpty
+            ? const Center(child: Text('لا توجد عملاء'))
+            : ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: _customers.length,
+                itemBuilder: (context, index) {
+                  final customer = _customers[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    child: ExpansionTile(
+                      title: Text(customer.pharmacyName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text('الرصيد: ${customer.balance.toStringAsFixed(2)}'),
+                      leading: CircleAvatar(
+                        backgroundColor: customer.balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
+                        child: Text('${customer.balance.toStringAsFixed(0)}'),
+                      ),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('الهاتف: ${customer.phone}'),
+                              const Divider(),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.receipt, color: Colors.teal),
+                                    onPressed: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerStatementScreen(customer: customer)));
+                                    },
+                                    tooltip: 'كشف حساب',
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _receivePayment(customer),
+                                    icon: const Icon(Icons.payment),
+                                    label: const Text('استلام دفعة'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _editCustomer(customer),
+                                    icon: const Icon(Icons.edit),
+                                    label: const Text('تعديل'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                                  ),
+                                  ElevatedButton.icon(
+                                    onPressed: () => _deleteCustomer(customer),
+                                    icon: const Icon(Icons.delete),
+                                    label: const Text('حذف'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Text('سجل المعاملات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: customer.transactions.length,
+                                itemBuilder: (ctx, idx) {
+                                  final t = customer.transactions[idx];
+                                  return ListTile(
+                                    title: Text('${t.amount > 0 ? '+' : ''}${t.amount.toStringAsFixed(2)}'),
+                                    subtitle: Text(t.note),
+                                    trailing: Text(_formatDate(t.date)),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addCustomer,
+        child: const Icon(Icons.add),
+        backgroundColor: Colors.teal,
       ),
     );
   }

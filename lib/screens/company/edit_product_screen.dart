@@ -1,15 +1,16 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import '../../models/product_model.dart';
 import '../../models/region_pricing.dart';
 import '../../models/bonus_model.dart';
-import '../../models/agency_model.dart';
+import '../../providers/product_provider.dart';
 
 class EditProductScreen extends StatefulWidget {
   final ProductModel product;
-  final AgencyModel agency;
-  const EditProductScreen({Key? key, required this.product, required this.agency}) : super(key: key);
+  final String agencyId;
+  const EditProductScreen({Key? key, required this.product, required this.agencyId}) : super(key: key);
 
   @override
   State<EditProductScreen> createState() => _EditProductScreenState();
@@ -91,6 +92,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
       id: widget.product.id,
       companyId: widget.product.companyId,
       companyName: widget.product.companyName,
+      agencyId: widget.agencyId,
       name: _nameController.text.trim(),
       scientificName: _scientificNameController.text.trim(),
       concentration: _concentrationController.text.trim(),
@@ -110,15 +112,23 @@ class _EditProductScreenState extends State<EditProductScreen> {
       piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
       defaultUnit: _defaultUnit,
       minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
+      createdBy: widget.product.createdBy,
+      branchId: widget.product.branchId,
     );
 
-    final index = widget.agency.products.indexWhere((p) => p.id == widget.product.id);
-    if (index != -1) widget.agency.products[index] = updatedProduct;
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تعديل المنتج بنجاح'), backgroundColor: Colors.green),
-    );
-    Navigator.pop(context, true);
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    productProvider.updateProduct(updatedProduct).then((_) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تعديل المنتج بنجاح'), backgroundColor: Colors.green),
+      );
+      Navigator.pop(context, true);
+    }).catchError((e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    });
   }
 
   @override
@@ -128,7 +138,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
         title: const Text('تعديل المنتج'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        automaticallyImplyLeading: false, // إزالة سهم الرجوع
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

@@ -15,18 +15,36 @@ class _PurchasesBySupplierScreenState extends State<PurchasesBySupplierScreen> {
   String _selectedSupplier = 'all';
   List<String> suppliers = [];
   DateTimeRange? _dateRange;
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSuppliers();
+    _loadData();
   }
 
-  void _loadSuppliers() {
-    final pharmacyId = Provider.of<AuthService>(context, listen: false).currentUserId ?? 'pharmacy_demo_123';
-    final orders = Provider.of<OrderProvider>(context, listen: false)
-        .getOrdersForPharmacy(pharmacyId);
-    suppliers = ['all', ...orders.map((o) => o.companyName).toSet().toList()];
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final pharmacyId = auth.currentUserId ?? 'pharmacy_demo_123';
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    List<OrderModel> orders = await orderProvider.getOrdersForPharmacy(pharmacyId);
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
+    final suppliersSet = orders.map((o) => o.companyName).toSet().toList();
+    setState(() {
+      _orders = orders;
+      suppliers = ['all', ...suppliersSet];
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadData();
   }
 
   Future<void> _selectDateRange() async {
@@ -36,29 +54,28 @@ class _PurchasesBySupplierScreenState extends State<PurchasesBySupplierScreen> {
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
-    if (picked != null) setState(() => _dateRange = picked);
+    if (picked != null) {
+      setState(() => _dateRange = picked);
+      await _loadData();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pharmacyId = Provider.of<AuthService>(context).currentUserId ?? 'pharmacy_demo_123';
-    List<OrderModel> orders = Provider.of<OrderProvider>(context)
-        .getOrdersForPharmacy(pharmacyId);
-
-    if (_dateRange != null) {
-      orders = orders.where((o) =>
-          o.date.isAfter(_dateRange!.start) &&
-          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('المشتريات حسب المورد'), centerTitle: true, backgroundColor: Colors.teal),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
     Map<String, double> purchasesBySupplier = {};
     Map<String, Map<String, double>> cashCreditBySupplier = {};
 
-    for (var order in orders) {
+    for (var order in _orders) {
       final supplier = order.companyName;
       final amount = order.totalPrice;
       purchasesBySupplier[supplier] = (purchasesBySupplier[supplier] ?? 0) + amount;
-
       cashCreditBySupplier.putIfAbsent(supplier, () => {'cash': 0.0, 'credit': 0.0});
       if (order.paymentType == 'cash') {
         cashCreditBySupplier[supplier]!['cash'] = (cashCreditBySupplier[supplier]!['cash'] ?? 0) + amount;
@@ -69,7 +86,6 @@ class _PurchasesBySupplierScreenState extends State<PurchasesBySupplierScreen> {
 
     List<MapEntry<String, double>> entries = purchasesBySupplier.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
-
     if (_selectedSupplier != 'all') {
       entries = entries.where((e) => e.key == _selectedSupplier).toList();
     }
@@ -80,70 +96,72 @@ class _PurchasesBySupplierScreenState extends State<PurchasesBySupplierScreen> {
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
-          ),
+          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
         ],
       ),
-      body: Column(
-        children: [
-          if (_dateRange != null)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.grey.shade100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(
-                    onPressed: () => setState(() => _dateRange = null),
-                    child: const Text('إلغاء التصفية'),
-                  ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: Column(
+          children: [
+            if (_dateRange != null)
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.grey.shade100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                    TextButton(
+                      onPressed: () async {
+                        setState(() => _dateRange = null);
+                        await _loadData();
+                      },
+                      child: const Text('إلغاء التصفية'),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: DropdownButtonFormField<String>(
+                value: _selectedSupplier,
+                decoration: const InputDecoration(labelText: 'تصفية حسب المورد'),
+                items: [
+                  const DropdownMenuItem(value: 'all', child: Text('جميع الموردين')),
+                  ...suppliers.where((s) => s != 'all').map((s) => DropdownMenuItem(value: s, child: Text(s))),
                 ],
+                onChanged: (val) => setState(() => _selectedSupplier = val!),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: DropdownButtonFormField<String>(
-              value: _selectedSupplier,
-              decoration: const InputDecoration(labelText: 'تصفية حسب المورد'),
-              items: [
-                const DropdownMenuItem(value: 'all', child: Text('جميع الموردين')),
-                ...suppliers.where((s) => s != 'all').map((s) => DropdownMenuItem(value: s, child: Text(s))),
-              ],
-              onChanged: (val) => setState(() => _selectedSupplier = val!),
-            ),
-          ),
-          Expanded(
-            child: entries.isEmpty
-                ? const Center(child: Text('لا توجد مشتريات'))
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: const [
-                        DataColumn(label: Text('المورد')),
-                        DataColumn(label: Text('إجمالي المشتريات')),
-                        DataColumn(label: Text('نقدي')),
-                        DataColumn(label: Text('آجل')),
-                      ],
-                      rows: entries.map((entry) {
-                        final supplier = entry.key;
-                        final total = entry.value;
-                        final cash = cashCreditBySupplier[supplier]?['cash'] ?? 0;
-                        final credit = cashCreditBySupplier[supplier]?['credit'] ?? 0;
-                        return DataRow(cells: [
-                          DataCell(Text(supplier)),
-                          DataCell(Text('${total.toStringAsFixed(2)}')),
-                          DataCell(Text('${cash.toStringAsFixed(2)}')),
-                          DataCell(Text('${credit.toStringAsFixed(2)}')),
-                        ]);
-                      }).toList(),
+            Expanded(
+              child: entries.isEmpty
+                  ? const Center(child: Text('لا توجد مشتريات'))
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columns: const [
+                          DataColumn(label: Text('المورد')),
+                          DataColumn(label: Text('إجمالي المشتريات')),
+                          DataColumn(label: Text('نقدي')),
+                          DataColumn(label: Text('آجل')),
+                        ],
+                        rows: entries.map((entry) {
+                          final supplier = entry.key;
+                          final total = entry.value;
+                          final cash = cashCreditBySupplier[supplier]?['cash'] ?? 0;
+                          final credit = cashCreditBySupplier[supplier]?['credit'] ?? 0;
+                          return DataRow(cells: [
+                            DataCell(Text(supplier)),
+                            DataCell(Text('${total.toStringAsFixed(2)}')),
+                            DataCell(Text('${cash.toStringAsFixed(2)}')),
+                            DataCell(Text('${credit.toStringAsFixed(2)}')),
+                          ]);
+                        }).toList(),
+                      ),
                     ),
-                  ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

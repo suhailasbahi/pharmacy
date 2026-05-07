@@ -1,95 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
-import '../models/role_model.dart';
-import '../models/permissions.dart';
 
 class UserManagementProvider extends ChangeNotifier {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<UserModel> _subAccounts = [];
 
   List<UserModel> get subAccounts => _subAccounts;
 
-  // تحميل بيانات تجريبية (في الحقيقة ستأتي من قاعدة بيانات أو SharedPreferences)
-  void loadSampleData(String companyId) {
-    _subAccounts = [
-      UserModel(
-        id: 'sub_1',
-        email: 'manager@example.com',
-        name: 'أحمد المدير',
-        phone: '777111222',
-        userType: 'sub_account',
-        parentCompanyId: companyId,
-        branchId: 'branch_1',
-        roleId: 'role_sales_manager',
-        customPermissions: [],
-        createdAt: DateTime.now(),
-      ),
-      UserModel(
-        id: 'sub_2',
-        email: 'accountant@example.com',
-        name: 'محمد المحاسب',
-        phone: '777333444',
-        userType: 'sub_account',
-        parentCompanyId: companyId,
-        branchId: 'branch_1',
-        roleId: 'role_accountant',
-        customPermissions: [],
-        createdAt: DateTime.now(),
-      ),
-      UserModel(
-        id: 'sub_3',
-        email: 'inventory@example.com',
-        name: 'خالد المخزون',
-        phone: '777555666',
-        userType: 'sub_account',
-        parentCompanyId: companyId,
-        branchId: 'branch_1',
-        roleId: 'role_inventory_manager',
-        customPermissions: [],
-        createdAt: DateTime.now(),
-      ),
-      UserModel(
-        id: 'sub_4',
-        email: 'rep@example.com',
-        name: 'سالم المندوب',
-        phone: '777777888',
-        userType: 'sub_account',
-        parentCompanyId: companyId,
-        branchId: 'branch_1',
-        roleId: 'role_sales_rep',
-        customPermissions: [],
-        createdAt: DateTime.now(),
-      ),
-    ];
+  Future<void> loadSubAccounts(String companyId) async {
+    final snapshot = await _firestore
+        .collection('users')
+        .where('parentCompanyId', isEqualTo: companyId)
+        .where('userType', isEqualTo: 'sub_account')
+        .get();
+    _subAccounts = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
     notifyListeners();
   }
 
-  void addSubAccount(UserModel user) {
+  Future<void> addSubAccount(UserModel user) async {
+    await _firestore.collection('users').doc(user.id).set(user.toMap());
     _subAccounts.add(user);
     notifyListeners();
   }
 
-  void updateSubAccount(UserModel user) {
+  Future<void> updateSubAccount(UserModel user) async {
+    await _firestore.collection('users').doc(user.id).update(user.toMap());
     final index = _subAccounts.indexWhere((u) => u.id == user.id);
-    if (index != -1) {
-      _subAccounts[index] = user;
-      notifyListeners();
-    }
+    if (index != -1) _subAccounts[index] = user;
+    notifyListeners();
   }
 
-  void deleteSubAccount(String id) {
+  Future<void> deleteSubAccount(String id) async {
+    await _firestore.collection('users').doc(id).delete();
     _subAccounts.removeWhere((u) => u.id == id);
     notifyListeners();
   }
 
-  List<UserModel> getSubAccountsForBranch(String branchId) {
-    return _subAccounts.where((u) => u.branchId == branchId).toList();
+  Future<List<UserModel>> getSubAccountsForBranch(String branchId) async {
+    final snapshot = await _firestore
+        .collection('users')
+        .where('branchId', isEqualTo: branchId)
+        .get();
+    return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
-  UserModel? getSubAccountById(String id) {
-    try {
-      return _subAccounts.firstWhere((u) => u.id == id);
-    } catch (e) {
-      return null;
-    }
+  Future<void> loadSampleData(String companyId) async {
+    await loadSubAccounts(companyId);
   }
 }

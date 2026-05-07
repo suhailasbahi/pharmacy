@@ -2,7 +2,6 @@ import 'product_model.dart';
 import 'agency_model.dart';
 import 'region_pricing.dart';
 
-// متغير وليس final لكي نتمكن من إضافة وكالات جديدة
 var dummyAgencies = [
   AgencyModel(
     id: 'agency_1',
@@ -14,6 +13,7 @@ var dummyAgencies = [
         id: 'p1',
         companyId: 'comp_001',
         companyName: 'شركة الأدوية العربية',
+        agencyId: 'agency_1',   // مضافة
         name: 'بنادول',
         scientificName: 'باراسيتامول',
         concentration: '500mg',

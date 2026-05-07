@@ -5,6 +5,7 @@ class ProductModel {
   final String id;
   final String companyId;
   final String companyName;
+  final String agencyId;          // جديد
   final String name;
   final String scientificName;
   final String concentration;
@@ -31,6 +32,7 @@ class ProductModel {
     required this.id,
     required this.companyId,
     required this.companyName,
+    required this.agencyId,
     required this.name,
     required this.scientificName,
     required this.concentration,
@@ -54,7 +56,6 @@ class ProductModel {
     this.branchId,
   });
 
-  // ========== الدوال المطلوبة ==========
   double getBasePriceForRegion(String regionId) {
     final pricing = regionPrices.firstWhere(
       (p) => p.regionId == regionId,
@@ -89,12 +90,12 @@ class ProductModel {
     }
   }
 
-  // باقي الدوال (toMap, fromMap) كما هي موجودة مسبقاً
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'companyId': companyId,
       'companyName': companyName,
+      'agencyId': agencyId,
       'name': name,
       'scientificName': scientificName,
       'concentration': concentration,
@@ -115,7 +116,7 @@ class ProductModel {
       'hasOffer': hasOffer,
       'offerPrice': offerPrice,
       'createdBy': createdBy,
-      'branchId' : branchId,
+      'branchId': branchId,
     };
   }
 
@@ -124,6 +125,7 @@ class ProductModel {
       id: id,
       companyId: map['companyId'] ?? '',
       companyName: map['companyName'] ?? '',
+      agencyId: map['agencyId'] ?? '',
       name: map['name'] ?? '',
       scientificName: map['scientificName'] ?? '',
       concentration: map['concentration'] ?? '',

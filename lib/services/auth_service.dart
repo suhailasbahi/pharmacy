@@ -83,11 +83,13 @@ class AuthService extends ChangeNotifier {
 
   // ========== تسجيل الدخول باستخدام Firebase Auth ==========
   Future<void> login(String email, String password) async {
-    try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+  try {
+    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    print("✅ Login successful: ${userCredential.user?.uid}");
+   
       String uid = userCredential.user!.uid;
       DocumentSnapshot doc =
           await _firestore.collection('users').doc(uid).get();
@@ -107,7 +109,8 @@ class AuthService extends ChangeNotifier {
       _isGuest = false;
       notifyListeners();
     } catch (e) {
-      throw Exception('فشل تسجيل الدخول: ${e.toString()}');
+    print("❌ Login error: $e");
+    throw Exception('فشل تسجيل الدخول: ${e.toString()}');
     }
   }
 

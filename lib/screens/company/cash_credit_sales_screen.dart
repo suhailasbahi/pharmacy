@@ -15,18 +15,37 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   String _selectedRegion = 'all';
   List<String> regions = [];
   DateTimeRange? _dateRange;
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadRegions();
+    _loadData();
   }
 
-  void _loadRegions() {
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
     final auth = Provider.of<AuthService>(context, listen: false);
-    final orders = Provider.of<OrderProvider>(context, listen: false)
-        .getOrdersForCompany(auth.currentCompanyId ?? 'comp_001', branchId: auth.getEffectiveBranchId());
-    regions = ['all', ...orders.map((o) => o.pharmacyCity).toSet().toList()];
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final branchId = auth.getEffectiveBranchId();
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    var orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
+    final cities = orders.map((o) => o.pharmacyCity).toSet().toList();
+    setState(() {
+      _orders = orders;
+      regions = ['all', ...cities];
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadData();
   }
 
   Future<void> _selectDateRange() async {
@@ -36,25 +55,24 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
-    if (picked != null) setState(() => _dateRange = picked);
+    if (picked != null) {
+      setState(() => _dateRange = picked);
+      await _loadData();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    List<OrderModel> filteredOrders = Provider.of<OrderProvider>(context)
-        .getOrdersForCompany(companyId, branchId: auth.getEffectiveBranchId());
-
-    if (_dateRange != null) {
-      filteredOrders = filteredOrders.where((o) =>
-          o.date.isAfter(_dateRange!.start) &&
-          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    if (_isLoading) {
+      return  Scaffold(
+        appBar: AppBar(title: Text('تفصيل المبيعات (نقدي/آجل)'), centerTitle: true, backgroundColor: Colors.teal),
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
     double totalCash = 0, totalCredit = 0;
     Map<String, double> cashByRegion = {}, creditByRegion = {};
-    for (var order in filteredOrders) {
+    for (var order in _orders) {
       final region = order.pharmacyCity;
       final amount = order.totalPrice;
       if (order.paymentType == 'cash') {
@@ -77,78 +95,89 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         title: const Text('تفصيل المبيعات (نقدي / آجل)'),
         centerTitle: true,
         backgroundColor: Colors.teal,
-        actions: [IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange)],
-      ),
-      body: Column(
-        children: [
-          if (_dateRange != null)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.grey.shade100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
-                  TextButton(onPressed: () => setState(() => _dateRange = null), child: const Text('إلغاء التصفية')),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: DropdownButtonFormField<String>(
-              value: _selectedRegion,
-              decoration: const InputDecoration(labelText: 'تصفية حسب المحافظة'),
-              items: [
-                const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
-                ...regions.where((r) => r != 'all').map((r) => DropdownMenuItem(value: r, child: Text(r))),
-              ],
-              onChanged: (val) => setState(() => _selectedRegion = val!),
-            ),
-          ),
-          Card(
-            margin: const EdgeInsets.all(12),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Text('الإجمالي الكلي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildSummaryCard('نقدي', totalCash, cashPercent, Colors.green),
-                      _buildSummaryCard('آجل', totalCredit, creditPercent, Colors.orange),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                columns: const [
-                  DataColumn(label: Text('المحافظة')),
-                  DataColumn(label: Text('نقدي')),
-                  DataColumn(label: Text('آجل')),
-                  DataColumn(label: Text('الإجمالي')),
-                ],
-                rows: displayRegions.map((region) {
-                  final cash = cashByRegion[region] ?? 0;
-                  final credit = creditByRegion[region] ?? 0;
-                  final totalRegion = cash + credit;
-                  return DataRow(cells: [
-                    DataCell(Text(region)),
-                    DataCell(Text('${cash.toStringAsFixed(2)}')),
-                    DataCell(Text('${credit.toStringAsFixed(2)}')),
-                    DataCell(Text('${totalRegion.toStringAsFixed(2)}')),
-                  ]);
-                }).toList(),
-              ),
-            ),
-          ),
+        actions: [
+          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
         ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: Column(
+          children: [
+            if (_dateRange != null)
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.grey.shade100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                    TextButton(
+                      onPressed: () async {
+                        setState(() => _dateRange = null);
+                        await _loadData();
+                      },
+                      child: const Text('إلغاء التصفية'),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: DropdownButtonFormField<String>(
+                value: _selectedRegion,
+                decoration: const InputDecoration(labelText: 'تصفية حسب المحافظة'),
+                items: [
+                  const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
+                  ...regions.where((r) => r != 'all').map((r) => DropdownMenuItem(value: r, child: Text(r))),
+                ],
+                onChanged: (val) => setState(() => _selectedRegion = val!),
+              ),
+            ),
+            Card(
+              margin: const EdgeInsets.all(12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Text('الإجمالي الكلي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildSummaryCard('نقدي', totalCash, cashPercent, Colors.green),
+                        _buildSummaryCard('آجل', totalCredit, creditPercent, Colors.orange),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('المحافظة')),
+                    DataColumn(label: Text('نقدي')),
+                    DataColumn(label: Text('آجل')),
+                    DataColumn(label: Text('الإجمالي')),
+                  ],
+                  rows: displayRegions.map((region) {
+                    final cash = cashByRegion[region] ?? 0;
+                    final credit = creditByRegion[region] ?? 0;
+                    final totalRegion = cash + credit;
+                    return DataRow(cells: [
+                      DataCell(Text(region)),
+                      DataCell(Text('${cash.toStringAsFixed(2)}')),
+                      DataCell(Text('${credit.toStringAsFixed(2)}')),
+                      DataCell(Text('${totalRegion.toStringAsFixed(2)}')),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

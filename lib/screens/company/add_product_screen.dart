@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../../models/product_model.dart';
 import '../../models/region_pricing.dart';
 import '../../models/bonus_model.dart';
-import '../../models/dummy_products.dart';
 import '../../models/agency_model.dart';
-import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../providers/product_provider.dart';
 
 class AddProductScreen extends StatefulWidget {
   @override
@@ -51,8 +52,20 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void initState() {
     super.initState();
-    _agencies = dummyAgencies.where((a) => a.companyId == 'comp_001').toList();
     _regionPrices = regions.map((reg) => RegionPricing(regionId: reg['id']!, regionName: reg['name']!, price: 0, currency: 'yemen')).toList();
+    _loadAgencies();
+  }
+
+  Future<void> _loadAgencies() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final snapshot = await FirebaseFirestore.instance
+        .collection('agencies')
+        .where('companyId', isEqualTo: companyId)
+        .get();
+    setState(() {
+      _agencies = snapshot.docs.map((doc) => AgencyModel.fromMap(doc.id, doc.data())).toList();
+    });
   }
 
   Future<void> _pickImage() async {
@@ -68,52 +81,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       lastDate: DateTime.now().add(const Duration(days: 1825)),
     );
     if (picked != null) setState(() => _expiryDate = picked);
-  }
-
-  void _addProduct() {
-    if (!_formKey.currentState!.validate()) return;
-    if (_expiryDate == null) {
-      _showSnackBar('يرجى اختيار تاريخ الصلاحية', Colors.orange);
-      return;
-    }
-    if (_selectedAgency == null) {
-      _showSnackBar('يرجى اختيار الوكالة', Colors.orange);
-      return;
-    }
-    setState(() => _isLoading = true);
-      
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final newProduct = ProductModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      companyId: 'comp_001',
-      companyName: 'شركة الأدوية العربية',
-      name: _nameController.text.trim(),
-      scientificName: _scientificNameController.text.trim(),
-      concentration: _concentrationController.text.trim(),
-      stockQuantity: int.parse(_stockController.text),
-      requiresCooling: _requiresCooling,
-      imageUrl: _selectedImage?.path,
-      expiryDate: _expiryDate!,
-      isActive: true,
-      createdAt: DateTime.now(),
-      regionPrices: _regionPrices,
-      bonusCash: _bonusCash,
-      bonusCredit: _bonusCredit,
-      pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
-      pricePerCarton: double.tryParse(_pricePerCartonController.text) ?? 0,
-      piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
-      defaultUnit: _defaultUnit,
-      minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
-      hasOffer: _hasOffer,
-      offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
-        createdBy:  auth.currentUserId,
-        branchId: auth.getEffectiveBranchId(),
-    );
-
-    _selectedAgency!.products.add(newProduct);
-    setState(() => _isLoading = false);
-    _showSnackBar('تم إضافة المنتج بنجاح', Colors.green);
-    _clearForm();
   }
 
   void _clearForm() {
@@ -143,13 +110,64 @@ class _AddProductScreenState extends State<AddProductScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
+  void _addProduct() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_expiryDate == null) {
+      _showSnackBar('يرجى اختيار تاريخ الصلاحية', Colors.orange);
+      return;
+    }
+    if (_selectedAgency == null) {
+      _showSnackBar('يرجى اختيار الوكالة', Colors.orange);
+      return;
+    }
+    setState(() => _isLoading = true);
+
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final agencyId = _selectedAgency!.id;
+
+    final newProduct = ProductModel(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      companyId: 'comp_001',
+      companyName: 'شركة الأدوية العربية',
+      agencyId: agencyId,
+      name: _nameController.text.trim(),
+      scientificName: _scientificNameController.text.trim(),
+      concentration: _concentrationController.text.trim(),
+      stockQuantity: int.parse(_stockController.text),
+      requiresCooling: _requiresCooling,
+      imageUrl: _selectedImage?.path,
+      expiryDate: _expiryDate!,
+      isActive: true,
+      createdAt: DateTime.now(),
+      regionPrices: _regionPrices,
+      bonusCash: _bonusCash,
+      bonusCredit: _bonusCredit,
+      pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
+      pricePerCarton: double.tryParse(_pricePerCartonController.text) ?? 0,
+      piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
+      defaultUnit: _defaultUnit,
+      minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
+      hasOffer: _hasOffer,
+      offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
+      createdBy: auth.currentUserId,
+    );
+
+    try {
+      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+      await productProvider.addProduct(newProduct);
+      _clearForm();
+      _showSnackBar('تم إضافة المنتج بنجاح', Colors.green);
+    } catch (e) {
+      _showSnackBar('حدث خطأ: ${e.toString()}', Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('إضافة دواء جديد'),
-                     automaticallyImplyLeading: false,
-                     centerTitle: true, backgroundColor: Colors.teal),
-     
+      appBar: AppBar(title: const Text('إضافة دواء جديد'), automaticallyImplyLeading: false, centerTitle: true, backgroundColor: Colors.teal),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -157,37 +175,37 @@ class _AddProductScreenState extends State<AddProductScreen> {
           child: Column(
             children: [
               _buildAgencyDropdown(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildImagePicker(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_nameController, 'الاسم التجاري', Icons.medication),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_scientificNameController, 'الاسم العلمي', Icons.science),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_concentrationController, 'التركيز', Icons.straighten),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildNumberField(_stockController, 'الكمية المتاحة', Icons.inventory),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildMinOrderField(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildUnitDropdown(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_pricePerPieceController, 'سعر الباكيت', Icons.currency_bitcoin, isNumber: true),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_pricePerCartonController, 'سعر الكرتون', Icons.inventory, isNumber: true),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildTextField(_piecesPerCartonController, 'عدد الباكيتات في الكرتون', Icons.view_agenda, isNumber: true),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildOfferSection(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildRegionPricingTable(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildBonusesSection(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildExpiryDatePicker(),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               _buildCoolingSwitch(),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               _buildSubmitButton(),
             ],
           ),
@@ -212,10 +230,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: TextField(
                 controller: _offerPriceController,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'سعر العرض (وحدة البيع الافتراضية)',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: InputDecoration(labelText: 'سعر العرض (وحدة البيع الافتراضية)', border: OutlineInputBorder()),
               ),
             ),
         ],
@@ -270,12 +285,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildMinOrderField() => TextFormField(
         controller: _minOrderController,
         keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          labelText: 'الحد الأدنى للطلب (بالباكيت)',
-          prefixIcon: Icon(Icons.low_priority),
-          suffixText: 'باكيت',
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+        decoration: InputDecoration(labelText: 'الحد الأدنى للطلب (بالباكيت)', prefixIcon: Icon(Icons.low_priority), suffixText: 'باكيت', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
       );
 
   Widget _buildUnitDropdown() => Container(

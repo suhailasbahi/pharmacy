@@ -1,123 +1,140 @@
 import 'package:flutter/material.dart';
-import '../models/account_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/account_model.dart' as ledger;
 
 class AccountProvider extends ChangeNotifier {
-  List<SupplierAccount> _suppliers = [];
-  List<CustomerAccount> _customers = [];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  List<ledger.SupplierAccount> _suppliers = [];
+  List<ledger.CustomerAccount> _customers = [];
 
-  List<SupplierAccount> get suppliers => _suppliers;
-  List<CustomerAccount> get customers => _customers;
-    // داخل كلاس AccountProvider، أضف:
+  List<ledger.SupplierAccount> get suppliers => _suppliers;
+  List<ledger.CustomerAccount> get customers => _customers;
 
-List<CustomerAccount> getCustomersForBranch(String branchId) {
-  return _customers.where((c) => c.branchId == branchId).toList();
-}
-
-  // ========== إدارة الموردين (للصيدلية) ==========
-  void addSupplier(SupplierAccount supplier) {
-    _suppliers.add(supplier);
+  Future<void> loadCustomers() async {
+    final snapshot = await _firestore.collection('customers').get();
+    _customers = snapshot.docs.map((doc) => ledger.CustomerAccount.fromMap(doc.id, doc.data())).toList();
     notifyListeners();
   }
 
-  void updateSupplier(SupplierAccount supplier) {
-    final index = _suppliers.indexWhere((s) => s.id == supplier.id);
-    if (index != -1) {
-      _suppliers[index] = supplier;
-      notifyListeners();
-    }
-  }
-
-  void deleteSupplier(String id) {
-    _suppliers.removeWhere((s) => s.id == id);
+  Future<void> loadSuppliers() async {
+    final snapshot = await _firestore.collection('suppliers').get();
+    _suppliers = snapshot.docs.map((doc) => ledger.SupplierAccount.fromMap(doc.id, doc.data())).toList();
     notifyListeners();
   }
 
-  void addSupplierTransaction(String supplierId, Transaction transaction) {
-  final index = _suppliers.indexWhere((s) => s.id == supplierId);
-  if (index != -1) {
-    final supplier = _suppliers[index];
-    final newTransactions = [...supplier.transactions, transaction];
-    double newBalance;
-    if (transaction.type == 'payment') {
-      // تسديد المورد يقلل الرصيد المستحق (لأن الصيدلية دفعت)
-      newBalance = supplier.balance - transaction.amount;
-    } else {
-      // شراء بالدين يزيد الرصيد المستحق
-      newBalance = supplier.balance + transaction.amount;
-    }
-    _suppliers[index] = supplier.copyWith(balance: newBalance, transactions: newTransactions);
-    notifyListeners();
-  }
-}
-  // ========== إدارة العملاء (للشركة) ==========
-  void addCustomer(CustomerAccount customer) {
+  Future<void> addCustomer(ledger.CustomerAccount customer) async {
+    await _firestore.collection('customers').doc(customer.id).set(customer.toMap());
     _customers.add(customer);
     notifyListeners();
   }
 
-  void updateCustomer(CustomerAccount customer) {
+  Future<void> updateCustomer(ledger.CustomerAccount customer) async {
+    await _firestore.collection('customers').doc(customer.id).update(customer.toMap());
     final index = _customers.indexWhere((c) => c.id == customer.id);
-    if (index != -1) {
-      _customers[index] = customer;
-      notifyListeners();
-    }
+    if (index != -1) _customers[index] = customer;
+    notifyListeners();
   }
 
-  void deleteCustomer(String id) {
+  Future<void> deleteCustomer(String id) async {
+    await _firestore.collection('customers').doc(id).delete();
     _customers.removeWhere((c) => c.id == id);
     notifyListeners();
   }
 
-  void addCustomerTransaction(String customerId, Transaction transaction) {
-  final index = _customers.indexWhere((c) => c.id == customerId);
-  if (index != -1) {
-    final customer = _customers[index];
+  Future<void> addCustomerTransaction(String customerId, ledger.LedgerTransaction transaction) async {
+    final customerRef = _firestore.collection('customers').doc(customerId);
+    final doc = await customerRef.get();
+    if (!doc.exists) return;
+    
+    final customer = ledger.CustomerAccount.fromMap(doc.id, doc.data()!);
     final newTransactions = [...customer.transactions, transaction];
     double newBalance;
     if (transaction.type == 'payment') {
-      // الدفعة المستلمة تقلل الرصيد المستحق على العميل
       newBalance = customer.balance - transaction.amount;
     } else {
-      // المشتريات تزيد الرصيد
       newBalance = customer.balance + transaction.amount;
     }
-    _customers[index] = customer.copyWith(balance: newBalance, transactions: newTransactions);
+    final updatedCustomer = customer.copyWith(balance: newBalance, transactions: newTransactions);
+    await customerRef.update(updatedCustomer.toMap());
+    
+    final index = _customers.indexWhere((c) => c.id == customerId);
+    if (index != -1) _customers[index] = updatedCustomer;
     notifyListeners();
   }
-}
 
-  // بيانات تجريبية للاختبار
-  void loadSampleData() {
+  Future<void> addSupplier(ledger.SupplierAccount supplier) async {
+    await _firestore.collection('suppliers').doc(supplier.id).set(supplier.toMap());
+    _suppliers.add(supplier);
+    notifyListeners();
+  }
+
+  Future<void> updateSupplier(ledger.SupplierAccount supplier) async {
+    await _firestore.collection('suppliers').doc(supplier.id).update(supplier.toMap());
+    final index = _suppliers.indexWhere((s) => s.id == supplier.id);
+    if (index != -1) _suppliers[index] = supplier;
+    notifyListeners();
+  }
+
+  Future<void> deleteSupplier(String id) async {
+    await _firestore.collection('suppliers').doc(id).delete();
+    _suppliers.removeWhere((s) => s.id == id);
+    notifyListeners();
+  }
+
+  Future<void> addSupplierTransaction(String supplierId, ledger.LedgerTransaction transaction) async {
+    final supplierRef = _firestore.collection('suppliers').doc(supplierId);
+    final doc = await supplierRef.get();
+    if (!doc.exists) return;
+    
+    final supplier = ledger.SupplierAccount.fromMap(doc.id, doc.data()!);
+    final newTransactions = [...supplier.transactions, transaction];
+    double newBalance;
+    if (transaction.type == 'payment') {
+      newBalance = supplier.balance - transaction.amount;
+    } else {
+      newBalance = supplier.balance + transaction.amount;
+    }
+    final updatedSupplier = supplier.copyWith(balance: newBalance, transactions: newTransactions);
+    await supplierRef.update(updatedSupplier.toMap());
+    
+    final index = _suppliers.indexWhere((s) => s.id == supplierId);
+    if (index != -1) _suppliers[index] = updatedSupplier;
+    notifyListeners();
+  }
+
+  Future<List<ledger.CustomerAccount>> getCustomersForBranch(String branchId) async {
+    final snapshot = await _firestore.collection('customers').where('branchId', isEqualTo: branchId).get();
+    return snapshot.docs.map((doc) => ledger.CustomerAccount.fromMap(doc.id, doc.data())).toList();
+  }
+
+  Future<void> loadSampleData() async {
     if (_suppliers.isEmpty) {
-      _suppliers = [
-        SupplierAccount(
-          id: 'sup1',
-          name: 'مستودع الخير',
-          phone: '777777777',
-          email: 'alkhair@example.com',
-          balance: 5000,
-          createdAt: DateTime.now(),
-          transactions: [
-            Transaction(id: 't1', amount: 5000, date: DateTime.now(), note: 'فاتورة أدوية', type: 'purchase'),
-          ],
-        ),
-      ];
+      await addSupplier(ledger.SupplierAccount(
+        id: 'sup1',
+        name: 'مستودع الخير',
+        phone: '777777777',
+        email: 'alkhair@example.com',
+        balance: 5000,
+        createdAt: DateTime.now(),
+        transactions: [
+          ledger.LedgerTransaction(id: 't1', amount: 5000, date: DateTime.now(), note: 'فاتورة أدوية', type: 'purchase'),
+        ],
+      ));
     }
     if (_customers.isEmpty) {
-      _customers = [
-        CustomerAccount(
-          id: 'cust1',
-          pharmacyId: 'pharm1',
-          pharmacyName: 'صيدلية السلام',
-          phone: '777888999',
-          balance: 2500,
-          createdAt: DateTime.now(),
-          transactions: [
-            Transaction(id: 't1', amount: -2500, date: DateTime.now(), note: 'شراء أدوية أجل', type: 'purchase'),
-          ],
-        ),
-      ];
+      await addCustomer(ledger.CustomerAccount(
+        id: 'cust1',
+        pharmacyId: 'pharm1',
+        pharmacyName: 'صيدلية السلام',
+        phone: '777888999',
+        balance: 2500,
+        createdAt: DateTime.now(),
+        transactions: [
+          ledger.LedgerTransaction(id: 't1', amount: 2500, date: DateTime.now(), note: 'شراء أدوية أجل', type: 'purchase'),
+        ],
+        branchId: null,
+      ));
     }
-    notifyListeners();
   }
 }

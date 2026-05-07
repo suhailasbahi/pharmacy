@@ -8,16 +8,15 @@ class CustomerStatementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // نسخ المعاملات وترتيبها تصاعدياً حسب التاريخ
-    final transactions = List<Transaction>.from(customer.transactions)
+    final transactions = List<LedgerTransaction>.from(customer.transactions)
       ..sort((a, b) => a.date.compareTo(b.date));
 
     double runningBalance = 0;
     List<Map<String, dynamic>> statementRows = [];
 
     for (var t in transactions) {
-      double debit = 0; // مدين (ما يزيد الدين على العميل)
-      double credit = 0; // دائن (ما يقلل الدين)
+      double debit = 0;
+      double credit = 0;
       if (t.type == 'purchase') {
         debit = t.amount;
         runningBalance += t.amount;
@@ -25,7 +24,6 @@ class CustomerStatementScreen extends StatelessWidget {
         credit = t.amount;
         runningBalance -= t.amount;
       } else {
-        // adjustment - حسب الإشارة
         if (t.amount > 0) {
           debit = t.amount;
           runningBalance += t.amount;
@@ -51,23 +49,21 @@ class CustomerStatementScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // ملخص سريع
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.teal.shade50,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _infoCard('إجمالي المشتريات', 
+                _infoCard('إجمالي المشتريات',
                     customer.transactions.where((t) => t.type == 'purchase').fold(0.0, (s, t) => s + t.amount).toStringAsFixed(2)),
-                _infoCard('إجمالي المدفوعات', 
+                _infoCard('إجمالي المدفوعات',
                     customer.transactions.where((t) => t.type == 'payment').fold(0.0, (s, t) => s + t.amount).toStringAsFixed(2)),
                 _infoCard('الرصيد الحالي', customer.balance.toStringAsFixed(2)),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          // الجدول
           Expanded(
             child: statementRows.isEmpty
                 ? const Center(child: Text('لا توجد معاملات'))

@@ -4,36 +4,78 @@ import '../../providers/order_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
 
-class MyOrdersScreen extends StatelessWidget {
+class MyOrdersScreen extends StatefulWidget {
+  @override
+  State<MyOrdersScreen> createState() => _MyOrdersScreenState();
+}
+
+class _MyOrdersScreenState extends State<MyOrdersScreen> {
+  List<OrderModel> _orders = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final pharmacyId = auth.currentUserId ?? 'pharmacy_demo_123';
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final orders = await orderProvider.getOrdersForPharmacy(pharmacyId);
+    setState(() {
+      _orders = orders;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadOrders();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final pharmacyId = Provider.of<AuthService>(context).currentUserId ?? 'pharmacy_demo_123';
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('طلباتي'),
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text('طلباتي'),
-                     automaticallyImplyLeading: false,centerTitle: true, backgroundColor: Colors.teal),
-      body: Consumer<OrderProvider>(
-        builder: (context, orderProvider, child) {
-          final orders = orderProvider.getOrdersForPharmacy(pharmacyId);
-          if (orders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                  SizedBox(height: 8),
-                  Text('قم بإتمام طلب من السلة', style: TextStyle(color: Colors.grey)),
-                ],
+      appBar: AppBar(
+        title: const Text('طلباتي'),
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _orders.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    const Text('قم بإتمام طلب من السلة', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: _orders.length,
+                itemBuilder: (context, index) => OrderCard(order: _orders[index]),
               ),
-            );
-          }
-          return ListView.builder(
-            padding: EdgeInsets.all(12),
-            itemCount: orders.length,
-            itemBuilder: (context, index) => OrderCard(order: orders[index]),
-          );
-        },
       ),
     );
   }
@@ -76,14 +118,14 @@ class _OrderCardState extends State<OrderCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Column(
         children: [
           InkWell(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
                   Row(
@@ -94,30 +136,30 @@ class _OrderCardState extends State<OrderCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('#${widget.order.id.substring(0, 8)}', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[600])),
-                            SizedBox(height: 4),
-                            Text(widget.order.companyName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text('صيدلية: ${widget.order.pharmacyName}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const SizedBox(height: 4),
+                            Text(widget.order.companyName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text('صيدلية: ${widget.order.pharmacyName}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                             Text('نوع الدفع: ${widget.order.paymentTypeText} - ${widget.order.paymentMethodText}', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           ],
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(color: _getStatusColor(widget.order.status).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                         child: Text(_getStatusText(widget.order.status), style: TextStyle(fontSize: 12, color: _getStatusColor(widget.order.status))),
                       ),
                     ],
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('التاريخ: ${_formatDate(widget.order.date)}', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       Text('${widget.order.items.length} منتجات', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text('${widget.order.totalPrice.toStringAsFixed(2)} جنيه', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                      Text('${widget.order.totalPrice.toStringAsFixed(2)} جنيه', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
                     ],
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -131,48 +173,48 @@ class _OrderCardState extends State<OrderCard> {
           ),
           if (_isExpanded)
             Container(
-              padding: EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
                   ListView.builder(
                     shrinkWrap: true,
-                    physics: NeverScrollableScrollPhysics(),
+                    physics: const NeverScrollableScrollPhysics(),
                     itemCount: widget.order.items.length,
                     itemBuilder: (context, index) {
                       final item = widget.order.items[index];
                       return Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('${item.productName} × ${item.quantity} ${item.unit == 'carton' ? 'كرتون' : 'باكيت'} (${item.quantityInPieces} باكيت)', style: TextStyle(fontSize: 14)),
+                            Text('${item.productName} × ${item.quantity} ${item.unit == 'carton' ? 'كرتون' : 'باكيت'} (${item.quantityInPieces} باكيت)', style: const TextStyle(fontSize: 14)),
                             Text('${(item.price * item.quantity).toStringAsFixed(2)} جنيه'),
                           ],
                         ),
                       );
                     },
                   ),
-                  Divider(),
+                  const Divider(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('الإجمالي:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('${widget.order.totalPrice.toStringAsFixed(2)} جنيه', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+                      const Text('الإجمالي:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('${widget.order.totalPrice.toStringAsFixed(2)} جنيه', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
                     ],
                   ),
                   if (widget.order.status == 'rejected' && widget.order.rejectionReason != null)
                     Container(
-                      margin: EdgeInsets.only(top: 16),
-                      padding: EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(top: 16),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('سبب الرفض:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                          SizedBox(height: 4),
+                          const Text('سبب الرفض:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                          const SizedBox(height: 4),
                           Text(widget.order.rejectionReason!),
                         ],
                       ),

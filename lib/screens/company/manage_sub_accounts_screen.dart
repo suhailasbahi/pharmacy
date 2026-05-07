@@ -14,87 +14,37 @@ class ManageSubAccountsScreen extends StatefulWidget {
 }
 
 class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
+  List<UserModel> _users = [];
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() => _isLoading = true);
     final auth = Provider.of<AuthService>(context, listen: false);
     final companyId = auth.currentCompanyId ?? 'comp_001';
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<UserManagementProvider>(context, listen: false).loadSampleData(companyId);
+    final userProvider = Provider.of<UserManagementProvider>(context, listen: false);
+    await userProvider.loadSampleData(companyId);
+    List<UserModel> users = userProvider.subAccounts;
+    final effectiveBranchId = auth.getEffectiveBranchId();
+    if (effectiveBranchId != null) {
+      users = users.where((u) => u.branchId == effectiveBranchId).toList();
+    }
+    setState(() {
+      _users = users;
+      _isLoading = false;
     });
   }
 
-  @override
-Widget build(BuildContext context) {
-  final auth = Provider.of<AuthService>(context);
-  if (!auth.canManageUsers) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
-      body: const Center(child: Text('ليس لديك صلاحية لعرض هذه الصفحة')),
-    );
+  Future<void> _refresh() async {
+    await _loadUsers();
   }
 
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text('إدارة الحسابات الفرعية'),
-      centerTitle: true,
-      backgroundColor: Colors.teal,
-    ),
-    body: Consumer2<UserManagementProvider, RoleProvider>(
-      builder: (context, userProvider, roleProvider, child) {
-        List<UserModel> users = userProvider.subAccounts;
-        // تصفية حسب الفرع إذا كان المستخدم مدير فرع
-        final effectiveBranchId = auth.getEffectiveBranchId();
-        if (effectiveBranchId != null) {
-          users = users.where((u) => u.branchId == effectiveBranchId).toList();
-        }
-        if (users.isEmpty) {
-          return const Center(child: Text('لا توجد حسابات فرعية'));
-        }
-        
-          return ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: users.length,
-            itemBuilder: (context, index) {
-              final user = users[index];
-              final role = roleProvider.getRoleById(user.roleId);
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: user.isActive ? Colors.green : Colors.red,
-                    child: Text(user.name[0]),
-                  ),
-                  title: Text(user.name),
-                  subtitle: Text('${user.email} | ${role?.name ?? 'بدون دور'}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.orange),
-                        onPressed: () => _editUser(context, user, roleProvider, userProvider),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteUser(context, user, userProvider),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _addUser(context),
-        child: const Icon(Icons.add),
-        backgroundColor: Colors.teal,
-      ),
-    );
-  }
-
-  void _addUser(BuildContext context) {
+  void _addUser() {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final phoneController = TextEditingController();
@@ -162,7 +112,7 @@ Widget build(BuildContext context) {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final auth = Provider.of<AuthService>(context, listen: false);
               final newUser = UserModel(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -171,13 +121,14 @@ Widget build(BuildContext context) {
                 phone: phoneController.text.trim(),
                 userType: 'sub_account',
                 parentCompanyId: auth.currentCompanyId,
-                branchId: null,
+                branchId: auth.getEffectiveBranchId(),
                 roleId: selectedRoleId!,
                 customPermissions: customPermissions,
                 createdAt: DateTime.now(),
               );
-              Provider.of<UserManagementProvider>(context, listen: false).addSubAccount(newUser);
+              await Provider.of<UserManagementProvider>(context, listen: false).addSubAccount(newUser);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة الحساب')));
             },
             child: const Text('إضافة'),
@@ -187,7 +138,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  void _editUser(BuildContext context, UserModel user, RoleProvider roleProvider, UserManagementProvider userProvider) {
+  void _editUser(UserModel user) {
     final nameController = TextEditingController(text: user.name);
     final emailController = TextEditingController(text: user.email);
     final phoneController = TextEditingController(text: user.phone);
@@ -202,6 +153,7 @@ Widget build(BuildContext context) {
           width: double.maxFinite,
           child: StatefulBuilder(
             builder: (ctx, setStateDialog) {
+              final roleProvider = Provider.of<RoleProvider>(context, listen: false);
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -249,7 +201,7 @@ Widget build(BuildContext context) {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final updatedUser = UserModel(
                 id: user.id,
                 email: emailController.text.trim(),
@@ -263,8 +215,9 @@ Widget build(BuildContext context) {
                 isActive: user.isActive,
                 createdAt: user.createdAt,
               );
-              userProvider.updateSubAccount(updatedUser);
+              await Provider.of<UserManagementProvider>(context, listen: false).updateSubAccount(updatedUser);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التعديل')));
             },
             child: const Text('حفظ'),
@@ -274,7 +227,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  void _deleteUser(BuildContext context, UserModel user, UserManagementProvider userProvider) {
+  void _deleteUser(UserModel user) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -283,15 +236,83 @@ Widget build(BuildContext context) {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
-              userProvider.deleteSubAccount(user.id);
+            onPressed: () async {
+              await Provider.of<UserManagementProvider>(context, listen: false).deleteSubAccount(user.id);
               Navigator.pop(ctx);
+              _refresh();
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحذف')));
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('حذف'),
           ),
         ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
+    if (!auth.canManageUsers) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
+        body: const Center(child: Text('ليس لديك صلاحية لعرض هذه الصفحة')),
+      );
+    }
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('إدارة الحسابات الفرعية'), centerTitle: true, backgroundColor: Colors.teal),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('إدارة الحسابات الفرعية'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _users.isEmpty
+            ? const Center(child: Text('لا توجد حسابات فرعية'))
+            : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: _users.length,
+                itemBuilder: (context, index) {
+                  final user = _users[index];
+                  final roleProvider = Provider.of<RoleProvider>(context);
+                  final role = roleProvider.getRoleById(user.roleId);
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: user.isActive ? Colors.green : Colors.red,
+                        child: Text(user.name[0]),
+                      ),
+                      title: Text(user.name),
+                      subtitle: Text('${user.email} | ${role?.name ?? 'بدون دور'}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.orange),
+                            onPressed: () => _editUser(user),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _deleteUser(user),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addUser,
+        child: const Icon(Icons.add),
+        backgroundColor: Colors.teal,
       ),
     );
   }

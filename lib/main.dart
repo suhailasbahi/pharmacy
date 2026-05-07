@@ -7,13 +7,12 @@ import 'services/auth_service.dart';
 import 'providers/account_provider.dart';
 import 'providers/role_provider.dart';
 import 'providers/user_management_provider.dart';
+import 'providers/product_provider.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    // options: DefaultFirebaseOptions.currentPlatform, // إذا كنت تستخدم الملفات التلقائية
-  );
+  await Firebase.initializeApp();
   runApp(MyApp());
 }
 
@@ -28,6 +27,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AccountProvider()),
         ChangeNotifierProvider(create: (_) => RoleProvider()),
         ChangeNotifierProvider(create: (_) => UserManagementProvider()),
+        ChangeNotifierProvider(create: (_) => ProductProvider()),
       ],
       child: MaterialApp(
         title: 'سوق الأدوية بالجملة',

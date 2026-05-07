@@ -1,18 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/role_model.dart';
 import '../models/permissions.dart';
 
 class RoleProvider extends ChangeNotifier {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<RoleModel> _roles = [];
 
   List<RoleModel> get roles => _roles;
 
-  RoleProvider() {
-    _loadSampleRoles();
+  Future<void> loadRoles() async {
+    final snapshot = await _firestore.collection('roles').get();
+    _roles = snapshot.docs.map((doc) => RoleModel.fromMap(doc.id, doc.data())).toList();
+    if (_roles.isEmpty) {
+      await _loadSampleRoles();
+    }
+    notifyListeners();
   }
 
-  void _loadSampleRoles() {
-    _roles = [
+  Future<void> _loadSampleRoles() async {
+    final batch = _firestore.batch();
+    for (var role in _getSampleRoles()) {
+      final docRef = _firestore.collection('roles').doc(role.id);
+      batch.set(docRef, role.toMap());
+    }
+    await batch.commit();
+    _roles = _getSampleRoles();
+  }
+
+  List<RoleModel> _getSampleRoles() {
+    return [
       RoleModel(
         id: 'role_owner',
         name: 'مدير (Owner)',
@@ -50,23 +67,23 @@ class RoleProvider extends ChangeNotifier {
         defaultPermissions: defaultRolePermissions['branch_manager'] ?? [],
       ),
     ];
-    notifyListeners();
   }
 
-  void addRole(RoleModel role) {
+  Future<void> addRole(RoleModel role) async {
+    await _firestore.collection('roles').doc(role.id).set(role.toMap());
     _roles.add(role);
     notifyListeners();
   }
 
-  void updateRole(RoleModel role) {
+  Future<void> updateRole(RoleModel role) async {
+    await _firestore.collection('roles').doc(role.id).update(role.toMap());
     final index = _roles.indexWhere((r) => r.id == role.id);
-    if (index != -1) {
-      _roles[index] = role;
-      notifyListeners();
-    }
+    if (index != -1) _roles[index] = role;
+    notifyListeners();
   }
 
-  void deleteRole(String id) {
+  Future<void> deleteRole(String id) async {
+    await _firestore.collection('roles').doc(id).delete();
     _roles.removeWhere((r) => r.id == id);
     notifyListeners();
   }
