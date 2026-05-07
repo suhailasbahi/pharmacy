@@ -26,8 +26,13 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthService>(context, listen: false);
     final companyId = auth.currentCompanyId ?? 'comp_001';
-    final snapshot = await _firestore.collection('agencies').where('companyId', isEqualTo: companyId).get();
-    final agencies = snapshot.docs.map((doc) => AgencyModel.fromMap(doc.id, doc.data())).toList();
+    final snapshot = await _firestore
+        .collection('agencies')
+        .where('companyId', isEqualTo: companyId)
+        .get();
+    final agencies = snapshot.docs
+        .map((doc) => AgencyModel.fromMap(doc.id, doc.data()))
+        .toList();
     setState(() {
       _agencies = agencies;
       _isLoading = false;
@@ -35,7 +40,7 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
   }
 
   Future<void> _refresh() async {
-    await _loadData();
+    await _loadAgencies();
   }
 
   void _addAgency() {
@@ -65,31 +70,43 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
                     : () async {
                         if (nameController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('يرجى إدخال اسم الوكالة'), backgroundColor: Colors.orange),
+                            const SnackBar(
+                                content: Text('يرجى إدخال اسم الوكالة'),
+                                backgroundColor: Colors.orange),
                           );
                           return;
                         }
                         setDialogState(() => isAdding = true);
                         try {
-                          final auth = Provider.of<AuthService>(context, listen: false);
+                          final auth =
+                              Provider.of<AuthService>(context, listen: false);
                           final newAgency = AgencyModel(
-                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
                             name: nameController.text.trim(),
                             companyId: auth.currentCompanyId ?? 'comp_001',
                             companyName: 'شركة الأدوية العربية',
                             products: [],
                             isActive: true,
                           );
-                          await _firestore.collection('agencies').doc(newAgency.id).set(newAgency.toMap());
+                          await _firestore
+                              .collection('agencies')
+                              .doc(newAgency.id)
+                              .set(newAgency.toMap());
                           Navigator.pop(ctx);
                           await _refresh();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('تم إضافة الوكالة بنجاح'), backgroundColor: Colors.green),
+                            const SnackBar(
+                                content: Text('تم إضافة الوكالة بنجاح'),
+                                backgroundColor: Colors.green),
                           );
                         } catch (e) {
                           setDialogState(() => isAdding = false);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+                            SnackBar(
+                                content: Text('خطأ: ${e.toString()}'),
+                                backgroundColor: Colors.red),
                           );
                         }
                       },
@@ -119,14 +136,18 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
               autofocus: true,
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('إلغاء')),
               ElevatedButton(
                 onPressed: isUpdating
                     ? null
                     : () async {
                         if (nameController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('يرجى إدخال اسم الوكالة'), backgroundColor: Colors.orange),
+                            const SnackBar(
+                                content: Text('يرجى إدخال اسم الوكالة'),
+                                backgroundColor: Colors.orange),
                           );
                           return;
                         }
@@ -140,16 +161,23 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
                             products: agency.products,
                             isActive: agency.isActive,
                           );
-                          await _firestore.collection('agencies').doc(agency.id).update(updatedAgency.toMap());
+                          await _firestore
+                              .collection('agencies')
+                              .doc(agency.id)
+                              .update(updatedAgency.toMap());
                           Navigator.pop(ctx);
                           await _refresh();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('تم تعديل الوكالة بنجاح'), backgroundColor: Colors.green),
+                            const SnackBar(
+                                content: Text('تم تعديل الوكالة بنجاح'),
+                                backgroundColor: Colors.green),
                           );
                         } catch (e) {
                           setDialogState(() => isUpdating = false);
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+                            SnackBar(
+                                content: Text('خطأ: ${e.toString()}'),
+                                backgroundColor: Colors.red),
                           );
                         }
                       },
@@ -165,7 +193,10 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
   void _deleteAgency(AgencyModel agency) async {
     if (agency.products.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('لا يمكن حذف وكالة تحتوي على منتجات. قم بحذف المنتجات أولاً.'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text(
+                'لا يمكن حذف وكالة تحتوي على منتجات. قم بحذف المنتجات أولاً.'),
+            backgroundColor: Colors.orange),
       );
       return;
     }
@@ -176,7 +207,9 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
         title: const Text('حذف الوكالة'),
         content: Text('هل أنت متأكد من حذف الوكالة "${agency.name}"؟'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -191,11 +224,15 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
       await _firestore.collection('agencies').doc(agency.id).delete();
       await _refresh();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم حذف الوكالة بنجاح'), backgroundColor: Colors.green),
+        const SnackBar(
+            content: Text('تم حذف الوكالة بنجاح'),
+            backgroundColor: Colors.green),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ أثناء الحذف: ${e.toString()}'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('خطأ أثناء الحذف: ${e.toString()}'),
+            backgroundColor: Colors.red),
       );
     }
   }
@@ -205,7 +242,10 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     final auth = Provider.of<AuthService>(context);
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('الوكالات'), centerTitle: true, backgroundColor: Colors.teal),
+        appBar: AppBar(
+            title: const Text('الوكالات'),
+            centerTitle: true,
+            backgroundColor: Colors.teal),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -257,7 +297,8 @@ class AgencyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
-    final agencyProducts = productProvider.products.where((p) => p.agencyId == agency.id).toList();
+    final agencyProducts =
+        productProvider.products.where((p) => p.agencyId == agency.id).toList();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -266,16 +307,26 @@ class AgencyCard extends StatelessWidget {
         leading: Container(
           width: 50,
           height: 50,
-          decoration: BoxDecoration(color: Colors.teal.shade100, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+              color: Colors.teal.shade100,
+              borderRadius: BorderRadius.circular(10)),
           child: const Icon(Icons.store, color: Colors.teal),
         ),
-        title: Text(agency.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: Text('${agencyProducts.length} منتج', style: const TextStyle(fontSize: 12)),
+        title: Text(agency.name,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        subtitle: Text('${agencyProducts.length} منتج',
+            style: const TextStyle(fontSize: 12)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(icon: const Icon(Icons.edit, color: Colors.orange), onPressed: onEdit, tooltip: 'تعديل'),
-            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: onDelete, tooltip: 'حذف'),
+            IconButton(
+                icon: const Icon(Icons.edit, color: Colors.orange),
+                onPressed: onEdit,
+                tooltip: 'تعديل'),
+            IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: onDelete,
+                tooltip: 'حذف'),
           ],
         ),
         children: [
@@ -287,11 +338,15 @@ class AgencyCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text('المنتجات:',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     TextButton.icon(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('إضافة منتج للوكالة من شاشة إضافة دواء'), backgroundColor: Colors.orange),
+                          const SnackBar(
+                              content:
+                                  Text('إضافة منتج للوكالة من شاشة إضافة دواء'),
+                              backgroundColor: Colors.orange),
                         );
                       },
                       icon: const Icon(Icons.add, size: 16),
@@ -301,18 +356,22 @@ class AgencyCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 agencyProducts.isEmpty
-                    ? const Center(child: Text('لا توجد منتجات في هذه الوكالة', style: TextStyle(color: Colors.grey)))
+                    ? const Center(
+                        child: Text('لا توجد منتجات في هذه الوكالة',
+                            style: TextStyle(color: Colors.grey)))
                     : GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           childAspectRatio: 0.7,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
                         itemCount: agencyProducts.length,
-                        itemBuilder: (context, index) => CompanyProductCard(product: agencyProducts[index]),
+                        itemBuilder: (context, index) =>
+                            CompanyProductCard(product: agencyProducts[index]),
                       ),
               ],
             ),
