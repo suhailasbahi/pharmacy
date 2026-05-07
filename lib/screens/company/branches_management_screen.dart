@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/branch_model.dart';
-import '../../services/auth_service.dart';
+import '../../providers/branch_provider.dart';
 import '../../providers/user_management_provider.dart';
+import '../../services/auth_service.dart';
+import '../../models/branch_model.dart';
 
 class BranchesManagementScreen extends StatefulWidget {
   const BranchesManagementScreen({Key? key}) : super(key: key);
@@ -12,7 +13,14 @@ class BranchesManagementScreen extends StatefulWidget {
 }
 
 class _BranchesManagementScreenState extends State<BranchesManagementScreen> {
-  List<BranchModel> branches = [];
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _phoneController = TextEditingController();
+  String? _selectedManagerId;
+  bool _isLoading = false;
+  List<BranchModel> _branches = [];
 
   @override
   void initState() {
@@ -20,178 +28,246 @@ class _BranchesManagementScreenState extends State<BranchesManagementScreen> {
     _loadBranches();
   }
 
-  void _loadBranches() {
+  Future<void> _loadBranches() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final branchProvider = Provider.of<BranchProvider>(context, listen: false);
+    await branchProvider.loadBranches(companyId);
     setState(() {
-      branches = [
-        BranchModel(
-          id: 'branch_1',
-          companyId: 'comp_001',
-          name: 'فرع صنعاء',
-          regionId: 'sanaa',
-          city: 'صنعاء',
-          address: 'شارع التعاون',
-          phone: '0123456789',
-          managerUserId: 'sub_1',
-          isActive: true,
-        ),
-        BranchModel(
-          id: 'branch_2',
-          companyId: 'comp_001',
-          name: 'فرع عدن',
-          regionId: 'aden',
-          city: 'عدن',
-          address: 'خور مكسر',
-          phone: '9876543210',
-          managerUserId: null,
-          isActive: true,
-        ),
-      ];
+      _branches = branchProvider.branches;
     });
   }
 
+  Future<void> _refresh() async {
+    await _loadBranches();
+  }
+
   void _addBranch() {
-    final nameController = TextEditingController();
-    final cityController = TextEditingController();
-    final addressController = TextEditingController();
-    final phoneController = TextEditingController();
-    String? selectedManagerId;
+    _nameController.clear();
+    _cityController.clear();
+    _addressController.clear();
+    _phoneController.clear();
+    _selectedManagerId = null;
+    _isLoading = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة فرع جديد'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'اسم الفرع')),
-            TextField(controller: cityController, decoration: const InputDecoration(labelText: 'المدينة')),
-            TextField(controller: addressController, decoration: const InputDecoration(labelText: 'العنوان')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'الهاتف')),
-            Consumer<UserManagementProvider>(
-              builder: (context, userProvider, child) {
-                final users = userProvider.subAccounts;
-                return DropdownButtonFormField<String>(
-                  value: selectedManagerId,
-                  hint: const Text('اختر مدير الفرع (اختياري)'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('بدون مدير')),
-                    ...users.map((u) => DropdownMenuItem(value: u.id, child: Text(u.name))),
-                  ],
-                  onChanged: (val) => selectedManagerId = val,
-                );
-              },
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('إضافة فرع جديد'),
+            content: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'اسم الفرع'),
+                    validator: (v) => v!.isEmpty ? 'أدخل الاسم' : null,
+                  ),
+                  TextFormField(
+                    controller: _cityController,
+                    decoration: const InputDecoration(labelText: 'المدينة'),
+                    validator: (v) => v!.isEmpty ? 'أدخل المدينة' : null,
+                  ),
+                  TextFormField(
+                    controller: _addressController,
+                    decoration: const InputDecoration(labelText: 'العنوان'),
+                  ),
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(labelText: 'الهاتف'),
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 12),
+                  Consumer<UserManagementProvider>(
+                    builder: (context, userProvider, child) {
+                      final users = userProvider.subAccounts;
+                      return DropdownButtonFormField<String>(
+                        value: _selectedManagerId,
+                        hint: const Text('اختر مدير الفرع (اختياري)'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('بدون مدير')),
+                          ...users.map((u) => DropdownMenuItem(value: u.id, child: Text(u.name))),
+                        ],
+                        onChanged: (val) => setDialogState(() => _selectedManagerId = val),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              final newBranch = BranchModel(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                companyId: 'comp_001',
-                name: nameController.text.trim(),
-                regionId: 'sanaa',
-                city: cityController.text.trim(),
-                address: addressController.text.trim(),
-                phone: phoneController.text.trim(),
-                managerUserId: selectedManagerId,
-                isActive: true,
-              );
-              setState(() => branches.add(newBranch));
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة الفرع')));
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        if (!_formKey.currentState!.validate()) return;
+                        setDialogState(() => _isLoading = true);
+                        try {
+                          final auth = Provider.of<AuthService>(context, listen: false);
+                          final newBranch = BranchModel(
+                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            companyId: auth.currentCompanyId ?? 'comp_001',
+                            name: _nameController.text.trim(),
+                            regionId: 'sanaa',
+                            city: _cityController.text.trim(),
+                            address: _addressController.text.trim(),
+                            phone: _phoneController.text.trim(),
+                            managerUserId: _selectedManagerId,
+                            isActive: true,
+                          );
+                          await Provider.of<BranchProvider>(context, listen: false).addBranch(newBranch);
+                          Navigator.pop(ctx);
+                          _refresh();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم إضافة الفرع'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          setDialogState(() => _isLoading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
+                child: const Text('إضافة'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   void _editBranch(BranchModel branch) {
-    final nameController = TextEditingController(text: branch.name);
-    final cityController = TextEditingController(text: branch.city);
-    final addressController = TextEditingController(text: branch.address);
-    final phoneController = TextEditingController(text: branch.phone);
-    String? selectedManagerId = branch.managerUserId;
+    _nameController.text = branch.name;
+    _cityController.text = branch.city;
+    _addressController.text = branch.address;
+    _phoneController.text = branch.phone;
+    _selectedManagerId = branch.managerUserId;
+    _isLoading = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تعديل الفرع'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'اسم الفرع')),
-            TextField(controller: cityController, decoration: const InputDecoration(labelText: 'المدينة')),
-            TextField(controller: addressController, decoration: const InputDecoration(labelText: 'العنوان')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'الهاتف')),
-            Consumer<UserManagementProvider>(
-              builder: (context, userProvider, child) {
-                final users = userProvider.subAccounts;
-                return DropdownButtonFormField<String>(
-                  value: selectedManagerId,
-                  hint: const Text('اختر مدير الفرع'),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('بدون مدير')),
-                    ...users.map((u) => DropdownMenuItem(value: u.id, child: Text(u.name))),
-                  ],
-                  onChanged: (val) => selectedManagerId = val,
-                );
-              },
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('تعديل الفرع'),
+            content: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'اسم الفرع'),
+                    validator: (v) => v!.isEmpty ? 'أدخل الاسم' : null,
+                  ),
+                  TextFormField(
+                    controller: _cityController,
+                    decoration: const InputDecoration(labelText: 'المدينة'),
+                    validator: (v) => v!.isEmpty ? 'أدخل المدينة' : null,
+                  ),
+                  TextFormField(
+                    controller: _addressController,
+                    decoration: const InputDecoration(labelText: 'العنوان'),
+                  ),
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(labelText: 'الهاتف'),
+                  ),
+                  const SizedBox(height: 12),
+                  Consumer<UserManagementProvider>(
+                    builder: (context, userProvider, child) {
+                      final users = userProvider.subAccounts;
+                      return DropdownButtonFormField<String>(
+                        value: _selectedManagerId,
+                        hint: const Text('اختر مدير الفرع'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('بدون مدير')),
+                          ...users.map((u) => DropdownMenuItem(value: u.id, child: Text(u.name))),
+                        ],
+                        onChanged: (val) => setDialogState(() => _selectedManagerId = val),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              final index = branches.indexWhere((b) => b.id == branch.id);
-              if (index != -1) {
-                branches[index] = BranchModel(
-                  id: branch.id,
-                  companyId: branch.companyId,
-                  name: nameController.text.trim(),
-                  regionId: branch.regionId,
-                  city: cityController.text.trim(),
-                  address: addressController.text.trim(),
-                  phone: phoneController.text.trim(),
-                  managerUserId: selectedManagerId,
-                  isActive: branch.isActive,
-                );
-                setState(() {});
-              }
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التعديل')));
-            },
-            child: const Text('حفظ'),
-          ),
-        ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        if (!_formKey.currentState!.validate()) return;
+                        setDialogState(() => _isLoading = true);
+                        try {
+                          final updatedBranch = BranchModel(
+                            id: branch.id,
+                            companyId: branch.companyId,
+                            name: _nameController.text.trim(),
+                            regionId: branch.regionId,
+                            city: _cityController.text.trim(),
+                            address: _addressController.text.trim(),
+                            phone: _phoneController.text.trim(),
+                            managerUserId: _selectedManagerId,
+                            isActive: branch.isActive,
+                          );
+                          await Provider.of<BranchProvider>(context, listen: false).updateBranch(updatedBranch);
+                          Navigator.pop(ctx);
+                          _refresh();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('تم التعديل'), backgroundColor: Colors.green),
+                          );
+                        } catch (e) {
+                          setDialogState(() => _isLoading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+                          );
+                        }
+                      },
+                child: const Text('حفظ'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  void _deleteBranch(BranchModel branch) {
-    showDialog(
+  void _deleteBranch(BranchModel branch) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('حذف الفرع'),
         content: Text('هل أنت متأكد من حذف فرع "${branch.name}"؟'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
-            onPressed: () {
-              setState(() => branches.removeWhere((b) => b.id == branch.id));
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحذف')));
-            },
+            onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('حذف'),
           ),
         ],
       ),
     );
+    if (confirm != true) return;
+    try {
+      await Provider.of<BranchProvider>(context, listen: false).deleteBranch(branch.id);
+      _refresh();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم حذف الفرع'), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -210,36 +286,38 @@ class _BranchesManagementScreenState extends State<BranchesManagementScreen> {
         centerTitle: true,
         backgroundColor: Colors.teal,
       ),
-      body: branches.isEmpty
-          ? const Center(child: Text('لا توجد فروع'))
-          : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: branches.length,
-              itemBuilder: (context, index) {
-                final branch = branches[index];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: ListTile(
-                    leading: const Icon(Icons.location_city),
-                    title: Text(branch.name),
-                    subtitle: Text('${branch.city} - ${branch.phone}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.orange),
-                          onPressed: () => _editBranch(branch),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () => _deleteBranch(branch),
-                        ),
-                      ],
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: _branches.isEmpty
+            ? const Center(child: Text('لا توجد فروع'))
+            : ListView.builder(
+                itemCount: _branches.length,
+                itemBuilder: (context, index) {
+                  final branch = _branches[index];
+                  return Card(
+                    margin: const EdgeInsets.all(8),
+                    child: ListTile(
+                      leading: const Icon(Icons.location_city),
+                      title: Text(branch.name),
+                      subtitle: Text('${branch.city} | ${branch.phone}'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.orange),
+                            onPressed: () => _editBranch(branch),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _deleteBranch(branch),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _addBranch,
         child: const Icon(Icons.add),

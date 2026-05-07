@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/agency_model.dart';
-import '../../models/product_model.dart';
+import '../../providers/product_provider.dart';
 import '../../widgets/company_product_card.dart';
 import '../../services/auth_service.dart';
 
@@ -35,7 +35,7 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
   }
 
   Future<void> _refresh() async {
-    await _loadAgencies();
+    await _loadData();
   }
 
   void _addAgency() {
@@ -119,10 +119,7 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
               autofocus: true,
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('إلغاء'),
-              ),
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
               ElevatedButton(
                 onPressed: isUpdating
                     ? null
@@ -140,7 +137,7 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
                             name: nameController.text.trim(),
                             companyId: agency.companyId,
                             companyName: agency.companyName,
-                            products: agency.products, // الحفاظ على المنتجات
+                            products: agency.products,
                             isActive: agency.isActive,
                           );
                           await _firestore.collection('agencies').doc(agency.id).update(updatedAgency.toMap());
@@ -173,7 +170,6 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
       return;
     }
 
-    // تأكيد الحذف
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -251,10 +247,18 @@ class AgencyCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const AgencyCard({Key? key, required this.agency, required this.onEdit, required this.onDelete}) : super(key: key);
+  const AgencyCard({
+    Key? key,
+    required this.agency,
+    required this.onEdit,
+    required this.onDelete,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final productProvider = Provider.of<ProductProvider>(context);
+    final agencyProducts = productProvider.products.where((p) => p.agencyId == agency.id).toList();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -266,20 +270,12 @@ class AgencyCard extends StatelessWidget {
           child: const Icon(Icons.store, color: Colors.teal),
         ),
         title: Text(agency.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: Text('${agency.products.length} منتج', style: const TextStyle(fontSize: 12)),
+        subtitle: Text('${agencyProducts.length} منتج', style: const TextStyle(fontSize: 12)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.orange, size: 20),
-              onPressed: onEdit,
-              tooltip: 'تعديل الوكالة',
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-              onPressed: onDelete,
-              tooltip: 'حذف الوكالة',
-            ),
+            IconButton(icon: const Icon(Icons.edit, color: Colors.orange), onPressed: onEdit, tooltip: 'تعديل'),
+            IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: onDelete, tooltip: 'حذف'),
           ],
         ),
         children: [
@@ -304,7 +300,7 @@ class AgencyCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                agency.products.isEmpty
+                agencyProducts.isEmpty
                     ? const Center(child: Text('لا توجد منتجات في هذه الوكالة', style: TextStyle(color: Colors.grey)))
                     : GridView.builder(
                         shrinkWrap: true,
@@ -315,8 +311,8 @@ class AgencyCard extends StatelessWidget {
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
                         ),
-                        itemCount: agency.products.length,
-                        itemBuilder: (context, index) => CompanyProductCard(product: agency.products[index]),
+                        itemCount: agencyProducts.length,
+                        itemBuilder: (context, index) => CompanyProductCard(product: agencyProducts[index]),
                       ),
               ],
             ),

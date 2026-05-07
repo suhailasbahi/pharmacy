@@ -49,7 +49,9 @@ class _MyProductsScreenState extends State<MyProductsScreen> {
   Future<void> _editProduct(ProductModel product) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EditProductScreen(product: product, agencyId: product.agencyId)), // تمرير agencyId
+      MaterialPageRoute(
+        builder: (_) => EditProductScreen(product: product, agencyId: product.agencyId),
+      ),
     );
     if (result == true) {
       _refresh();

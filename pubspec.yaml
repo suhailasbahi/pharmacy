@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  uuid: ^4.0.0
+  firebase_storage: ^11.6.0
 
   # UI & State Management
   provider: ^6.1.1
@@ -19,7 +21,7 @@ dependencies:
   firebase_core: ^2.25.0
   firebase_auth: ^4.17.0
   cloud_firestore: ^4.15.0
-
+  
   # Other utilities
   cupertino_icons: ^1.0.2
 
@@ -30,4 +32,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  
+  
   

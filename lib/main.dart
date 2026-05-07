@@ -9,6 +9,7 @@ import 'providers/role_provider.dart';
 import 'providers/user_management_provider.dart';
 import 'providers/product_provider.dart';
 import 'screens/splash_screen.dart';
+import 'providers/branch_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +29,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RoleProvider()),
         ChangeNotifierProvider(create: (_) => UserManagementProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
+          ChangeNotifierProvider(create: (_) => BranchProvider()),
       ],
       child: MaterialApp(
         title: 'سوق الأدوية بالجملة',

@@ -163,6 +163,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
       setState(() => _isLoading = false);
     }
   }
+    
+    
 
   @override
   Widget build(BuildContext context) {
