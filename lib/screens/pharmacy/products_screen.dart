@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/dummy_products.dart';
-import '../../models/product_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/product_card.dart';
+import '../../models/product_model.dart';
 
 class ProductsScreen extends StatefulWidget {
   @override
@@ -16,25 +16,36 @@ class _ProductsScreenState extends State<ProductsScreen> {
   String _searchQuery = '';
   String _selectedCategory = 'الكل';
   bool _showFilters = false;
+  List<ProductModel> _products = [];
+  List<String> _categories = ['الكل'];
+  bool _isLoading = true;
 
-  List<String> get categories {
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() => _isLoading = true);
+    final snapshot = await FirebaseFirestore.instance.collection('products').get();
+    final products = snapshot.docs.map((doc) => ProductModel.fromMap(doc.id, doc.data() as Map<String, dynamic>)).toList();
+    // استخراج الفئات
     Set<String> cats = {'الكل'};
-    for (var agency in dummyAgencies) {
-      for (var product in agency.products) {
-        if (product.isActive) {
-          cats.add(_getCategoryFromName(product.name));
-        }
+    for (var p in products) {
+      if (p.isActive) {
+        cats.add(_getCategoryFromName(p.name));
       }
     }
-    return cats.toList();
+    setState(() {
+      _products = products;
+      _categories = cats.toList();
+      _isLoading = false;
+    });
   }
 
   List<ProductModel> get filteredProducts {
-    List<ProductModel> allProducts = [];
-    for (var agency in dummyAgencies) {
-      allProducts.addAll(agency.products);
-    }
-    return allProducts.where((product) {
+    return _products.where((product) {
       if (!product.isActive) return false;
       bool matchesSearch = _searchQuery.isEmpty ||
           product.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
@@ -66,10 +77,22 @@ class _ProductsScreenState extends State<ProductsScreen> {
     final regionId = authService.currentRegionId ?? 'sanaa';
     final products = filteredProducts;
 
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('تصفح الأدوية'),
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('تصفح الأدوية'),
-          automaticallyImplyLeading: false,
+        title: const Text('تصفح الأدوية'),
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
@@ -88,10 +111,10 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'ابحث عن دواء، شركة، أو تركيز...',
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear),
+                            icon: const Icon(Icons.clear),
                             onPressed: () {
                               _searchController.clear();
                               setState(() => _searchQuery = '');
@@ -109,11 +132,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Row(
-                      children: categories.map((category) {
+                      children: _categories.map((category) {
                         return Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: FilterChip(
                             label: Text(category),
                             selected: _selectedCategory == category,
@@ -130,50 +153,53 @@ class _ProductsScreenState extends State<ProductsScreen> {
           ),
         ),
       ),
-      body: products.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 80, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('لا توجد نتائج', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                  SizedBox(height: 8),
-                  Text('حاول تغيير كلمة البحث أو التصنيف', style: TextStyle(color: Colors.grey)),
-                  SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _searchQuery = '';
-                        _selectedCategory = 'الكل';
-                        _searchController.clear();
-                      });
-                    },
-                    child: Text('مسح الفلترة'),
-                  ),
-                ],
+      body: RefreshIndicator(
+        onRefresh: _loadProducts,
+        child: products.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.search_off, size: 80, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text('لا توجد نتائج', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                    const SizedBox(height: 8),
+                    const Text('حاول تغيير كلمة البحث أو التصنيف', style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _searchQuery = '';
+                          _selectedCategory = 'الكل';
+                          _searchController.clear();
+                        });
+                      },
+                      child: const Text('مسح الفلترة'),
+                    ),
+                  ],
+                ),
+              )
+            : GridView.builder(
+                padding: const EdgeInsets.all(8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.72,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  final isInCart = cartProvider.isInCart(product.id);
+                  return ProductCard(
+                    product: product,
+                    isInCart: isInCart,
+                    regionId: regionId,
+                    showAddToCart: true,
+                  );
+                },
               ),
-            )
-          : GridView.builder(
-              padding: EdgeInsets.all(8),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: products.length,
-              itemBuilder: (context, index) {
-                final product = products[index];
-                final isInCart = cartProvider.isInCart(product.id);
-                return ProductCard(
-                  product: product,
-                  isInCart: isInCart,
-                  regionId: regionId,
-                  showAddToCart: true,
-                );
-              },
-            ),
+      ),
     );
   }
 }

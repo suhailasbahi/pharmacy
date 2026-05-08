@@ -128,7 +128,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final newProduct = ProductModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       companyId: 'comp_001',
-      companyName: 'شركة الأدوية العربية',
+    companyName: auth.currentCompanyName ?? 'شركة الأدوية العربية',
       agencyId: agencyId,
       name: _nameController.text.trim(),
       scientificName: _scientificNameController.text.trim(),

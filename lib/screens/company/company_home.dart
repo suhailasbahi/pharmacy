@@ -47,18 +47,18 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.teal),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text('القائمة', style: TextStyle(color: Colors.white, fontSize: 24)),
-                  SizedBox(height: 8),
-                  Text('شركة الأدوية', style: TextStyle(color: Colors.white70)),
-                ],
-              ),
-            ),
+             DrawerHeader(
+  decoration: BoxDecoration(color: Colors.teal),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      Text('القائمة', style: TextStyle(color: Colors.white, fontSize: 24)),
+      SizedBox(height: 8),
+      Text('شركة الأدوية', style: TextStyle(color: Colors.white70)),
+    ],
+  ),
+),
             // ========== القسم الأساسي (حسب الصلاحيات) ==========
             if (auth.canViewAllProducts || auth.canViewOwnProducts)
               ListTile(

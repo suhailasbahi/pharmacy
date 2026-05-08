@@ -19,9 +19,11 @@ class AuthService extends ChangeNotifier {
   List<String> _currentPermissions = [];
   String? _currentBranchId;
   List<String> _currentCustomPermissions = [];
+  String? _currentCompanyName;
 
   String? get currentUserId => _currentUserModel?.id;
   String? get currentUserType => _currentUserType;
+  String? get currentCompanyName => _currentUserModel?.name;
   String? get currentCompanyId => _currentCompanyId;
   String? get currentPharmacyName => _currentPharmacyName;
   String? get currentRegionId => _currentRegionId;
@@ -78,6 +80,7 @@ class AuthService extends ChangeNotifier {
     _currentPermissions = [];
     _currentCustomPermissions = [];
     _currentBranchId = null;
+      _currentCompanyName = null;
     notifyListeners();
   }
 
