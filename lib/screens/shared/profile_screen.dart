@@ -10,8 +10,15 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
     final userType = auth.currentUserType;
-    final name = userType == 'company' ? 'شركة الأدوية العربية' : (auth.currentPharmacyName ?? 'صيدلية تجريبية');
-    final email = userType == 'company' ? 'company@example.com' : 'pharmacy@example.com';
+    String name;
+    if (userType == 'company') {
+      name = auth.currentCompanyName ?? 'شركة غير مسماة';
+    } else if (userType == 'sub_account') {
+      name = 'حساب فرعي';
+    } else {
+      name = auth.currentPharmacyName ?? 'صيدلية تجريبية';
+    }
+    final email = userType == 'company' ? (auth.currentUserId ?? 'company@example.com') : (auth.currentUserId ?? 'pharmacy@example.com');
 
     return Scaffold(
       appBar: AppBar(title: const Text('حسابي'), centerTitle: true, backgroundColor: Colors.teal),
@@ -27,7 +34,7 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 20),
             Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(email),
+            Text(email, style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () async {

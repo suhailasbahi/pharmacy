@@ -102,6 +102,7 @@ class AuthService extends ChangeNotifier {
       _currentUserType = _currentUserModel!.userType;
       _currentCompanyId =
           _currentUserModel!.parentCompanyId ?? _currentUserModel!.companyId;
+      _currentCompanyName = _currentUserModel!.name;
       _currentPharmacyName = _currentUserModel!.name;
       _currentRegionId = _currentUserModel!.address;
       _currentRoleId = _currentUserModel!.roleId;

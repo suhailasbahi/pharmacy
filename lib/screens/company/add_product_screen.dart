@@ -127,8 +127,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
     final newProduct = ProductModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      companyId: 'comp_001',
-    companyName: auth.currentCompanyName ?? 'شركة الأدوية العربية',
+      companyId: auth.currentCompanyId ?? 'comp_001',
+      companyName: auth.currentCompanyName ?? 'شركة الأدوية العربية',
       agencyId: agencyId,
       name: _nameController.text.trim(),
       scientificName: _scientificNameController.text.trim(),
@@ -157,14 +157,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
       await productProvider.addProduct(newProduct);
       _clearForm();
       _showSnackBar('تم إضافة المنتج بنجاح', Colors.green);
+      Navigator.pop(context, true);
     } catch (e) {
       _showSnackBar('حدث خطأ: ${e.toString()}', Colors.red);
     } finally {
       setState(() => _isLoading = false);
     }
   }
-    
-    
 
   @override
   Widget build(BuildContext context) {
@@ -219,10 +218,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildOfferSection() {
     return Card(
       child: ExpansionTile(
-        title: Text('عرض خاص', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('عرض خاص', style: TextStyle(fontWeight: FontWeight.bold)),
         children: [
           SwitchListTile(
-            title: Text('تفعيل عرض خاص'),
+            title: const Text('تفعيل عرض خاص'),
             value: _hasOffer,
             onChanged: (val) => setState(() => _hasOffer = val),
           ),
@@ -232,7 +231,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
               child: TextField(
                 controller: _offerPriceController,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'سعر العرض (وحدة البيع الافتراضية)', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'سعر العرض (وحدة البيع الافتراضية)',
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
         ],
@@ -263,9 +265,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
           child: _selectedImage != null
               ? ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(_selectedImage!, fit: BoxFit.cover))
               : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.add_photo_alternate, size: 48, color: Colors.grey),
+                  const Icon(Icons.add_photo_alternate, size: 48, color: Colors.grey),
                   const SizedBox(height: 8),
-                  Text('اضغط لإضافة صورة', style: TextStyle(color: Colors.grey)),
+                  const Text('اضغط لإضافة صورة', style: TextStyle(color: Colors.grey)),
                 ]),
         ),
       );
@@ -287,7 +289,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildMinOrderField() => TextFormField(
         controller: _minOrderController,
         keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: 'الحد الأدنى للطلب (بالباكيت)', prefixIcon: Icon(Icons.low_priority), suffixText: 'باكيت', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+        decoration: InputDecoration(
+          labelText: 'الحد الأدنى للطلب (بالباكيت)',
+          prefixIcon: const Icon(Icons.low_priority),
+          suffixText: 'باكيت',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
 
   Widget _buildUnitDropdown() => Container(
@@ -305,19 +312,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildRegionPricingTable() {
     return Card(
       child: ExpansionTile(
-        title: Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columns: [DataColumn(label: Text('المنطقة')), DataColumn(label: Text('السعر')), DataColumn(label: Text('العملة')), DataColumn(label: Text('الضريبة %'))],
+              columns: const [DataColumn(label: Text('المنطقة')), DataColumn(label: Text('السعر')), DataColumn(label: Text('العملة')), DataColumn(label: Text('الضريبة %'))],
               rows: _regionPrices.map((rp) {
                 int idx = _regionPrices.indexOf(rp);
                 return DataRow(cells: [
                   DataCell(Text(rp.regionName)),
                   DataCell(TextField(
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: 'السعر'),
+                    decoration: const InputDecoration(labelText: 'السعر'),
                     onChanged: (val) => setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: double.tryParse(val) ?? 0, currency: rp.currency, taxRate: rp.taxRate)),
                   )),
                   DataCell(DropdownButton<String>(
@@ -327,7 +334,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   )),
                   DataCell(TextField(
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: '%'),
+                    decoration: const InputDecoration(labelText: '%'),
                     onChanged: (val) => setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: rp.price, currency: rp.currency, taxRate: double.tryParse(val) ?? 0)),
                   )),
                 ]);
@@ -341,25 +348,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Widget _buildBonusesSection() => Card(
         child: ExpansionTile(
-          title: Text('البونص (نقدي وآجل)', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text('البونص (نقدي وآجل)', style: TextStyle(fontWeight: FontWeight.bold)),
           children: [
             ListTile(
-              title: Text('بونص على الطلبات النقدية'),
+              title: const Text('بونص على الطلبات النقدية'),
               subtitle: TextField(
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'النسبة المئوية (مثال: 10)'),
+                decoration: const InputDecoration(labelText: 'النسبة المئوية (مثال: 10)'),
                 onChanged: (val) {
                   double p = double.tryParse(val) ?? 0;
                   setState(() => _bonusCash = p > 0 ? BonusModel(percentage: p, forCashOnly: true) : null);
                 },
               ),
             ),
-            Divider(),
+            const Divider(),
             ListTile(
-              title: Text('بونص على الطلبات الآجلة'),
+              title: const Text('بونص على الطلبات الآجلة'),
               subtitle: TextField(
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'النسبة المئوية (مثال: 5)'),
+                decoration: const InputDecoration(labelText: 'النسبة المئوية (مثال: 5)'),
                 onChanged: (val) {
                   double p = double.tryParse(val) ?? 0;
                   setState(() => _bonusCredit = p > 0 ? BonusModel(percentage: p, forCashOnly: false) : null);
@@ -376,7 +383,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
           child: Row(children: [
-            Icon(Icons.calendar_today, color: Colors.teal),
+            const Icon(Icons.calendar_today, color: Colors.teal),
             const SizedBox(width: 12),
             Text(_expiryDate == null ? 'اختر تاريخ الصلاحية' : 'تاريخ الصلاحية: ${_expiryDate!.year}-${_expiryDate!.month}-${_expiryDate!.day}'),
           ]),

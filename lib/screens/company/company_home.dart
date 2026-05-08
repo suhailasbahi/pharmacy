@@ -39,10 +39,10 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
     final auth = Provider.of<AuthService>(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('لوحة الشركة'),
-        centerTitle: true,
-        backgroundColor: Colors.teal,
-      ),
+  title: Text(auth.currentCompanyName ?? 'لوحة الشركة'),
+  centerTitle: true,
+  backgroundColor: Colors.teal,
+),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -55,7 +55,7 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
     children: [
       Text('القائمة', style: TextStyle(color: Colors.white, fontSize: 24)),
       SizedBox(height: 8),
-      Text('شركة الأدوية', style: TextStyle(color: Colors.white70)),
+      Text(auth.currentCompanyName ?? 'شركة الأدوية', style: TextStyle(color: Colors.white70)),
     ],
   ),
 ),

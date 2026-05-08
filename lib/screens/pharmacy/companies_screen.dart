@@ -21,18 +21,20 @@ class _CompaniesScreenState extends State<CompaniesScreen> {
 
   Future<void> _loadCompanies() async {
     setState(() => _isLoading = true);
-    final snapshot = await FirebaseFirestore.instance.collection('agencies').get();
-    final Map<String, String> companiesMap = {};
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('userType', isEqualTo: 'company')
+        .get();
+    final List<Map<String, String>> companies = [];
     for (var doc in snapshot.docs) {
       final data = doc.data();
-      final companyId = data['companyId'] ?? '';
-      final companyName = data['companyName'] ?? '';
-      if (companyId.isNotEmpty && !companiesMap.containsKey(companyId)) {
-        companiesMap[companyId] = companyName;
-      }
+      companies.add({
+        'id': doc.id,
+        'name': data['name'] ?? 'شركة غير مسماة',
+      });
     }
     setState(() {
-      _companies = companiesMap.entries.map((e) => {'id': e.key, 'name': e.value}).toList();
+      _companies = companies;
       _isLoading = false;
     });
   }
@@ -115,57 +117,57 @@ class _CompaniesScreenState extends State<CompaniesScreen> {
                   final company = companies[index];
                   final companyId = company['id']!;
                   final companyName = company['name']!;
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AgenciesScreen(companyId: companyId, companyName: companyName),
+                  return FutureBuilder<int>(
+                    future: _countAgencies(companyId),
+                    builder: (context, snapshot) {
+                      final count = snapshot.data ?? 0;
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AgenciesScreen(companyId: companyId, companyName: companyName),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.shade100,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.business, size: 28, color: Colors.teal),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        companyName,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text('$count وكالة', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                              ],
+                            ),
                           ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: Colors.teal.shade100,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.business, size: 28, color: Colors.teal),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    companyName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  FutureBuilder<int>(
-                                    future: _countAgencies(companyId),
-                                    builder: (context, snapshot) {
-                                      final count = snapshot.data ?? 0;
-                                      return Text('$count وكالة', style: const TextStyle(fontSize: 12, color: Colors.grey));
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                          ],
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   );
                 },
               ),
