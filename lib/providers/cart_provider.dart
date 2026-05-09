@@ -23,7 +23,6 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
-  // إضافة هذه الدالة الجديدة
   void updateBonusesForCompany(String companyId, bool isCashOrder) {
     for (var item in _items) {
       if (item.companyId == companyId) {

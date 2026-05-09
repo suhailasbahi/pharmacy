@@ -1,32 +1,29 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/product_model.dart';
 import '../screens/pharmacy/product_details_screen.dart';
+import '../services/auth_service.dart';
 
 class ProductCard extends StatelessWidget {
   final ProductModel product;
   final bool isInCart;
   final String regionId;
-  final bool showAddToCart; // لن نستخدمه
+  final bool showAddToCart;
 
   const ProductCard({
     Key? key,
     required this.product,
     required this.isInCart,
     required this.regionId,
-    this.showAddToCart = true,
+    this.showAddToCart = false,
   }) : super(key: key);
 
   String _getCategoryFromName(String name) {
-    if (name.contains('باراسيتامول') || name.contains('إيبوبروفين') || name.contains('ديكلوفيناك')) {
-      return 'مسكنات';
-    } else if (name.contains('أموكسيسيلين') || name.contains('أزيثروميسين')) {
-      return 'مضادات حيوية';
-    } else if (name.contains('فيتامين')) {
-      return 'فيتامينات';
-    } else {
-      return 'أدوية';
-    }
+    if (name.contains('بنادول') || name.contains('بروفين') || name.contains('ديكلوفيناك')) return 'مسكنات';
+    else if (name.contains('أموكسيل') || name.contains('زيتروماكس')) return 'مضادات حيوية';
+    else if (name.contains('فيتامين')) return 'فيتامينات';
+    else return 'أدوية';
   }
 
   Color _getCategoryColor(String category) {
@@ -40,6 +37,7 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
     final category = _getCategoryFromName(product.name);
     final price = product.getFinalPriceForRegion(regionId);
     final currency = product.getCurrencyForRegion(regionId);
@@ -47,6 +45,11 @@ class ProductCard extends StatelessWidget {
     final maxBonus = (product.bonusCash?.percentage ?? 0) > (product.bonusCredit?.percentage ?? 0)
         ? (product.bonusCash?.percentage ?? 0)
         : (product.bonusCredit?.percentage ?? 0);
+    
+    // استخدام اسم الشركة الحقيقي إذا كان المنتج تابعاً للشركة الحالية
+    final displayCompanyName = (auth.currentCompanyId == product.companyId && auth.currentCompanyName != null)
+        ? auth.currentCompanyName
+        : product.companyName;
 
     return GestureDetector(
       onTap: () {
@@ -141,9 +144,16 @@ class ProductCard extends StatelessWidget {
                               style: TextStyle(fontSize: 7, color: Colors.amber.shade800),
                             ),
                           ),
+                        // عرض اسم الشركة الصحيح (بدون تغيير في التصميم)
+                        const SizedBox(height: 4),
+                        Text(
+                          displayCompanyName ?? '',
+                          style: TextStyle(fontSize: 9, color: Colors.grey[600]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
-                    // تمت إزالة زر "أضف إلى السلة" نهائياً
                   ],
                 ),
               ),

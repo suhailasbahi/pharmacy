@@ -45,8 +45,7 @@ class CartItem {
     this.bonusCreditPercentage,
   });
 
-  factory CartItem.fromProduct(ProductModel product, String regionId, {bool isCashOrder = true}) {
-    // حساب السعر الفعلي للوحدة حسب العرض إن وجد
+  factory CartItem.fromProduct(ProductModel product, String regionId, {bool isCashOrder = true, String? overriddenCompanyName}) {
     double effectivePricePerPiece = product.pricePerPiece;
     double effectivePricePerCarton = product.pricePerCarton;
     
@@ -61,7 +60,7 @@ class CartItem {
     return CartItem(
       id: product.id,
       companyId: product.companyId,
-      companyName: product.companyName,
+      companyName: overriddenCompanyName ?? product.companyName,
       name: product.name,
       scientificName: product.scientificName,
       concentration: product.concentration,
@@ -78,18 +77,10 @@ class CartItem {
     );
   }
 
-  double get unitPrice {
-    return unit == 'piece' ? pricePerPiece : pricePerCarton;
-  }
-
+  double get unitPrice => unit == 'piece' ? pricePerPiece : pricePerCarton;
   double get totalPrice => unitPrice * quantity;
+  int get totalPieces => unit == 'piece' ? quantity : quantity * piecesPerCarton;
 
-  int get totalPieces {
-    if (unit == 'piece') return quantity;
-    return quantity * piecesPerCarton;
-  }
-
-  // Get the applicable bonus percentage based on order type (cash/credit)
   double getBonusPercentage(bool isCashOrder) {
     if (isCashOrder && bonusCashPercentage != null) return bonusCashPercentage!;
     if (!isCashOrder && bonusCreditPercentage != null) return bonusCreditPercentage!;

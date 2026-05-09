@@ -23,7 +23,15 @@ class ProductDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context);
+    // داخل دالة build، قبل إنشاء cartItem:
+
+final authService = Provider.of<AuthService>(context);
+final effectiveCompanyName = (authService.currentCompanyId == product.companyId && authService.currentCompanyName != null)
+    ? authService.currentCompanyName
+    : product.companyName;
+
+final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: effectiveCompanyName);
+      
     final isPharmacy = authService.currentUserType == 'pharmacy';
     final cartProvider = Provider.of<CartProvider>(context);
     final isInCart = cartProvider.isInCart(product.id);
