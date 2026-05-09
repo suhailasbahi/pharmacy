@@ -210,7 +210,7 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                               SnackBar(content: Text('${product.name} موجود بالفعل في السلة')),
                             );
                           } else {
-                            final cartItem = CartItem.fromProduct(product, regionId);
+                            final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: effectiveCompanyName);
                             cartProvider.addToCart(cartItem, isCashOrder: true);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

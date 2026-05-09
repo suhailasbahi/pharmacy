@@ -46,16 +46,31 @@ class CartItem {
   });
 
   factory CartItem.fromProduct(ProductModel product, String regionId, {bool isCashOrder = true, String? overriddenCompanyName}) {
-    double effectivePricePerPiece = product.pricePerPiece;
-    double effectivePricePerCarton = product.pricePerCarton;
-    
-    if (product.hasOffer && product.offerPrice != null) {
-      if (product.defaultUnit == 'piece') {
-        effectivePricePerPiece = product.offerPrice!;
-      } else {
-        effectivePricePerCarton = product.offerPrice!;
-      }
+      // جلب السعر بعد تطبيق الضريبة أو العرض حسب المنطقة
+  final regionPrice = product.getFinalPriceForRegion(regionId);
+  double effectivePricePerPiece = product.pricePerPiece;
+  double effectivePricePerCarton = product.pricePerCarton;
+
+  
+  // الـ regionPrice هو سعر الوحدة الافتراضية للمنتج. نحتاج إلى تحويله إلى سعر القطعة والكرتون.
+  // أبسط طريقة: نفترض أن regionPrice هو سعر الوحدة الافتراضية (باكيت أو كرتون) مع مراعاة العرض.
+  if (product.defaultUnit == 'piece') {
+    effectivePricePerPiece = regionPrice;
+    effectivePricePerCarton = regionPrice * product.piecesPerCarton;
+  } else {
+    effectivePricePerCarton = regionPrice;
+    effectivePricePerPiece = regionPrice / product.piecesPerCarton;
+  }
+
+  // تطبيق العرض الخاص إذا كان موجوداً (اختياري)
+  if (product.hasOffer && product.offerPrice != null) {
+    if (product.defaultUnit == 'piece') {
+      effectivePricePerPiece = product.offerPrice!;
+    } else {
+      effectivePricePerCarton = product.offerPrice!;
     }
+  }
+
     
     return CartItem(
       id: product.id,

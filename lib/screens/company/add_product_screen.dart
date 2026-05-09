@@ -157,7 +157,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       await productProvider.addProduct(newProduct);
       _clearForm();
       _showSnackBar('تم إضافة المنتج بنجاح', Colors.green);
-      Navigator.pop(context, true);
+     
     } catch (e) {
       _showSnackBar('حدث خطأ: ${e.toString()}', Colors.red);
     } finally {

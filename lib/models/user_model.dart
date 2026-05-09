@@ -15,6 +15,7 @@ class UserModel {
   final bool isApproved;
   final String? address;
   final String? companyId;
+  final bool isDeleted;
 
   UserModel({
     required this.id,
@@ -33,6 +34,7 @@ class UserModel {
     this.isApproved = false,
     this.address,
     this.companyId,
+      this.isDeleted = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -65,6 +67,7 @@ class UserModel {
       branchId: map['branchId'],
       roleId: map['roleId'] ?? '',
       customPermissions: List<String>.from(map['customPermissions'] ?? []),
+       
       isActive: map['isActive'] ?? true,
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
       licenseNumber: map['licenseNumber'],

@@ -46,7 +46,6 @@ class ProductCard extends StatelessWidget {
         ? (product.bonusCash?.percentage ?? 0)
         : (product.bonusCredit?.percentage ?? 0);
     
-    // استخدام اسم الشركة الحقيقي إذا كان المنتج تابعاً للشركة الحالية
     final displayCompanyName = (auth.currentCompanyId == product.companyId && auth.currentCompanyName != null)
         ? auth.currentCompanyName
         : product.companyName;
@@ -144,7 +143,6 @@ class ProductCard extends StatelessWidget {
                               style: TextStyle(fontSize: 7, color: Colors.amber.shade800),
                             ),
                           ),
-                        // عرض اسم الشركة الصحيح (بدون تغيير في التصميم)
                         const SizedBox(height: 4),
                         Text(
                           displayCompanyName ?? '',

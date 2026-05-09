@@ -98,6 +98,10 @@ class AuthService extends ChangeNotifier {
           await _firestore.collection('users').doc(uid).get();
       if (!doc.exists) throw Exception('المستخدم غير موجود في قاعدة البيانات');
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      
+    if (data['isDeleted'] == true) {
+  throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
+}
       _currentUserModel = UserModel.fromMap(uid, data);
       _currentUserType = _currentUserModel!.userType;
       _currentCompanyId =
@@ -175,6 +179,14 @@ class AuthService extends ChangeNotifier {
     _currentBranchId = null;
     notifyListeners();
   }
+    // حذف حساب
+    Future<void> deleteAccount() async {
+  final user = _auth.currentUser;
+  if (user == null) throw Exception('لا يوجد مستخدم مسجل');
+  await _firestore.collection('users').doc(user.uid).update({'isDeleted': true});
+  await user.delete(); // حذف من Firebase Auth
+  await logout();
+}
 
   // ========== مساعدة ==========
   Future<List<String>> _getRolePermissions(String roleId) async {

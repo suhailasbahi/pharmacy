@@ -30,7 +30,6 @@ class _ProductsScreenState extends State<ProductsScreen> {
     setState(() => _isLoading = true);
     final snapshot = await FirebaseFirestore.instance.collection('products').get();
     final products = snapshot.docs.map((doc) => ProductModel.fromMap(doc.id, doc.data() as Map<String, dynamic>)).toList();
-    // استخراج الفئات
     Set<String> cats = {'الكل'};
     for (var p in products) {
       if (p.isActive) {
