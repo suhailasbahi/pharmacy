@@ -4,6 +4,7 @@ import '../../providers/order_provider.dart';
 import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
+import 'edit_order_screen.dart';
 
 class CompanyOrdersScreen extends StatefulWidget {
   @override
@@ -221,10 +222,13 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
-                    Text(_isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ]),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
+                      Text(_isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -259,6 +263,20 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                   if (order.status == 'pending')
                     Row(
                       children: [
+                        if (auth.canAcceptOrder || auth.canRejectOrder)
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => EditOrderScreen(order: order)),
+                                );
+                                if (result == true) widget.onStatusChanged();
+                              },
+                              child: const Text('تعديل الطلب'),
+                            ),
+                          ),
+                        if (auth.canRejectOrder) const SizedBox(width: 8),
                         if (auth.canRejectOrder)
                           Expanded(
                             child: OutlinedButton(
@@ -267,7 +285,7 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                               child: const Text('رفض', style: TextStyle(color: Colors.red)),
                             ),
                           ),
-                        if (auth.canRejectOrder && auth.canAcceptOrder) const SizedBox(width: 8),
+                        if (auth.canAcceptOrder) const SizedBox(width: 8),
                         if (auth.canAcceptOrder)
                           Expanded(
                             child: ElevatedButton(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/auth_service.dart';
+import '../../services/auth_service.dart';
+import '../../models/region.dart';
 import 'pharmacy/pharmacy_home.dart';
 import 'company/company_home.dart';
 import 'shared/login_screen.dart';
@@ -12,25 +12,21 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  String? _selectedCityForGuest;
-  final List<String> _cities = [
-    'صنعاء', 'عدن', 'تعز', 'الحديدة', 'إب', 'المكلا', 'سيئون',
-    'البيضاء', 'عمران', 'ذمار', 'حضرموت', 'المهرة', 'شبوة',
-    'لحج', 'أبين', 'الجوف', 'مأرب', 'صعدة', 'ريمة', 'حجة',
-  ];
+  String? _selectedRegionId;
+  final List<Region> _regions = Region.allRegions;
 
   Future<void> _proceedAsGuest() async {
-    if (_selectedCityForGuest == null) {
+    if (_selectedRegionId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('يرجى اختيار المحافظة للتصفح'), backgroundColor: Colors.orange),
       );
       return;
     }
     final auth = Provider.of<AuthService>(context, listen: false);
-    auth.enterAsGuest(_selectedCityForGuest!);
+    auth.enterAsGuest(_selectedRegionId!);
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => PharmacyHomeScreen(selectedCity: _selectedCityForGuest!, isGuest: true)),
+      MaterialPageRoute(builder: (_) => PharmacyHomeScreen(selectedCity: _selectedRegionId!, isGuest: true)),
     );
   }
 
@@ -40,10 +36,9 @@ class _SplashScreenState extends State<SplashScreen> {
       if (auth.currentUserType == 'company') {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => CompanyHomeScreen()));
       } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PharmacyHomeScreen(selectedCity: auth.currentRegionId ?? 'صنعاء', isGuest: false)));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PharmacyHomeScreen(selectedCity: auth.currentRegionId ?? 'sanaa', isGuest: false)));
       }
     } else {
-      // Show login screen
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => LoginScreen()));
     }
   }
@@ -51,13 +46,11 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // After a short delay, check auth status or show guest selection
-    Future.delayed(Duration(seconds: 1), () {
+    Future.delayed(const Duration(seconds: 1), () {
       final auth = Provider.of<AuthService>(context, listen: false);
       if (auth.isLoggedIn) {
         _checkLoggedInUser();
       } else {
-        // Show guest selection UI
         setState(() {});
       }
     });
@@ -67,7 +60,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
     if (auth.isLoggedIn) {
-      return Container(); // will be replaced in initState
+      return Container();
     }
     return Scaffold(
       body: Container(
@@ -84,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.medical_services, size: 100, color: Colors.white),
+                const Icon(Icons.medical_services, size: 100, color: Colors.white),
                 const SizedBox(height: 20),
                 const Text(
                   'سوق الأدوية بالجملة',
@@ -102,15 +95,15 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: _selectedCityForGuest,
+                      value: _selectedRegionId,
                       hint: const Text('اختر المحافظة للتصفح'),
                       isExpanded: true,
                       icon: const Icon(Icons.arrow_drop_down_circle),
                       iconSize: 30,
-                      items: _cities.map((city) {
-                        return DropdownMenuItem(value: city, child: Text(city));
+                      items: _regions.map((region) {
+                        return DropdownMenuItem(value: region.id, child: Text(region.name));
                       }).toList(),
-                      onChanged: (value) => setState(() => _selectedCityForGuest = value),
+                      onChanged: (value) => setState(() => _selectedRegionId = value),
                     ),
                   ),
                 ),

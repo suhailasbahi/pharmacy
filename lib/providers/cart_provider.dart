@@ -32,13 +32,24 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  int _getMinAllowedQuantity(CartItem item) {
+    if (item.unit == 'carton') {
+      return (item.minOrderQuantity / item.piecesPerCarton).ceil();
+    } else {
+      return item.minOrderQuantity;
+    }
+  }
+
   void addToCart(CartItem item, {bool isCashOrder = true}) {
     final existingIndex = _items.indexWhere((i) => i.id == item.id);
     if (existingIndex != -1) {
       _items[existingIndex].quantity++;
       _applyBonus(_items[existingIndex], isCashOrder);
     } else {
-      if (item.quantity < item.minOrderQuantity) item.quantity = item.minOrderQuantity;
+      int initialQty = item.quantity;
+      int minQty = _getMinAllowedQuantity(item);
+      if (initialQty < minQty) initialQty = minQty;
+      item.quantity = initialQty;
       _items.add(item);
       _applyBonus(item, isCashOrder);
     }
@@ -58,7 +69,8 @@ class CartProvider extends ChangeNotifier {
     final index = _items.indexWhere((item) => item.id == productId);
     if (index != -1) {
       final item = _items[index];
-      if (item.quantity > item.minOrderQuantity) {
+      final minAllowed = _getMinAllowedQuantity(item);
+      if (item.quantity > minAllowed) {
         item.quantity--;
         _applyBonus(item, isCashOrder);
         notifyListeners();
@@ -68,10 +80,16 @@ class CartProvider extends ChangeNotifier {
 
   void updateQuantity(String productId, int newQuantity, {bool isCashOrder = true}) {
     final index = _items.indexWhere((item) => item.id == productId);
-    if (index != -1 && newQuantity > 0) {
-      _items[index].quantity = newQuantity;
-      _applyBonus(_items[index], isCashOrder);
-      notifyListeners();
+    if (index != -1) {
+      final item = _items[index];
+      final minAllowed = _getMinAllowedQuantity(item);
+      int finalQty = newQuantity;
+      if (finalQty < minAllowed) finalQty = minAllowed;
+      if (finalQty > 0) {
+        _items[index].quantity = finalQty;
+        _applyBonus(_items[index], isCashOrder);
+        notifyListeners();
+      }
     }
   }
 
@@ -87,26 +105,21 @@ class CartProvider extends ChangeNotifier {
       return;
     }
 
+    int newQuantity;
     if (item.unit == 'piece' && newUnit == 'carton') {
-      int cartons = item.quantity ~/ item.piecesPerCarton;
-      if (cartons < 1) {
-        cartons = 1;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('الكمية الحالية (${item.quantity} باكيت) أقل من كرتون واحد. تم رفع الطلب إلى كرتون واحد (${item.piecesPerCarton} باكيت).'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-      item.quantity = cartons;
-      item.unit = newUnit;
+      newQuantity = (item.quantity / item.piecesPerCarton).ceil();
+      if (newQuantity < 1) newQuantity = 1;
     } else if (item.unit == 'carton' && newUnit == 'piece') {
-      item.quantity = item.quantity * item.piecesPerCarton;
-      item.unit = newUnit;
+      newQuantity = item.quantity * item.piecesPerCarton;
     } else {
       return;
     }
+
+    item.quantity = newQuantity;
+    item.unit = newUnit;
+    final minAllowed = _getMinAllowedQuantity(item);
+    if (item.quantity < minAllowed) item.quantity = minAllowed;
+
     _applyBonus(item, isCashOrder);
     notifyListeners();
   }

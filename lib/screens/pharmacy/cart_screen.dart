@@ -20,13 +20,55 @@ class CartScreen extends StatefulWidget {
 class _CartScreenState extends State<CartScreen> {
   Map<String, Map<String, dynamic>> _paymentOptions = {};
 
+  // دالة لحساب الحد الأدنى للكمية بناءً على الوحدة الحالية
+  int _getMinAllowedQuantity(CartItem item) {
+    if (item.unit == 'carton') {
+      // الحد الأدنى بالباكيت مقسوم على عدد الباكيتات في الكرتون، ثم نأخذ أعلى عدد صحيح
+      return (item.minOrderQuantity / item.piecesPerCarton).ceil();
+    } else {
+      return item.minOrderQuantity;
+    }
+  }
+
+  void _showQuantityEditDialog(BuildContext context, CartProvider cartProvider, CartItem item) {
+    final minAllowed = _getMinAllowedQuantity(item);
+    final controller = TextEditingController(text: item.quantity.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تعديل الكمية'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: 'الكمية',
+            hintText: 'الحد الأدنى: $minAllowed',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              int newQty = int.tryParse(controller.text) ?? minAllowed;
+              if (newQty < minAllowed) newQty = minAllowed;
+              cartProvider.updateQuantity(item.id, newQty);
+              Navigator.pop(ctx);
+            },
+            child: const Text('تطبيق'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer2<CartProvider, AuthService>(
       builder: (context, cartProvider, authService, child) {
         if (cartProvider.items.isEmpty) {
           return Scaffold(
-            appBar: AppBar(title: Text('سلة المشتريات'), centerTitle: true, backgroundColor: Colors.teal),
+            appBar: AppBar(title: const Text('سلة المشتريات'), centerTitle: true, backgroundColor: Colors.teal),
             body: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -65,7 +107,7 @@ class _CartScreenState extends State<CartScreen> {
           body: Stack(
             children: [
               ListView.builder(
-                padding: EdgeInsets.only(bottom: 100),
+                padding: const EdgeInsets.only(bottom: 100),
                 itemCount: itemsByCompany.keys.length,
                 itemBuilder: (context, companyIndex) {
                   final companyId = itemsByCompany.keys.toList()[companyIndex];
@@ -96,7 +138,7 @@ class _CartScreenState extends State<CartScreen> {
                           itemBuilder: (context, index) {
                             final item = companyItems[index];
                             final category = _getCategoryFromName(item.name);
-                            
+
                             return Card(
                               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -134,58 +176,55 @@ class _CartScreenState extends State<CartScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 8),
-                                    if (item.piecesPerCarton > 0)
-                                      Row(
-                                        children: [
-                                          Text('الوحدة:', style: TextStyle(fontSize: 12)),
-                                          SizedBox(width: 8),
-                                          DropdownButton<String>(
-                                            value: item.unit,
-                                            items: const [
-                                              DropdownMenuItem(value: 'piece', child: Text('باكيت')),
-                                              DropdownMenuItem(value: 'carton', child: Text('كرتون')),
-                                            ],
-                                            onChanged: (newUnit) {
-                                              if (newUnit != null && newUnit != item.unit) {
-                                                final isCash = _paymentOptions[companyId]!['paymentType'] == 'cash';
-                                                cartProvider.changeUnit(item.id, newUnit, context, isCashOrder: isCash);
-                                              }
-                                            },
-                                            style: TextStyle(color: Colors.black, fontSize: 12),
-                                            dropdownColor: Colors.white,
-                                            iconEnabledColor: Colors.teal,
-                                          ),
-                                          Spacer(),
-                                          IconButton(onPressed: () => cartProvider.decreaseQuantity(item.id), icon: const Icon(Icons.remove, color: Colors.red, size: 20)),
-                                          GestureDetector(
-                                            onTap: () => _showQuantityEditDialog(context, cartProvider, item),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                                              child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Row(
+                                      children: [
+                                        const Text('الوحدة:', style: TextStyle(fontSize: 12)),
+                                        const SizedBox(width: 8),
+                                        DropdownButton<String>(
+                                          value: item.unit,
+                                          items: const [
+                                            DropdownMenuItem(value: 'piece', child: Text('باكيت')),
+                                            DropdownMenuItem(value: 'carton', child: Text('كرتون')),
+                                          ],
+                                          onChanged: (newUnit) {
+                                            if (newUnit != null && newUnit != item.unit) {
+                                              final isCash = _paymentOptions[companyId]!['paymentType'] == 'cash';
+                                              cartProvider.changeUnit(item.id, newUnit, context, isCashOrder: isCash);
+                                            }
+                                          },
+                                          style: const TextStyle(color: Colors.black, fontSize: 12),
+                                          dropdownColor: Colors.white,
+                                          iconEnabledColor: Colors.teal,
+                                        ),
+                                        const Spacer(),
+                                        IconButton(
+                                          icon: const Icon(Icons.remove, color: Colors.red, size: 20),
+                                          onPressed: () => cartProvider.decreaseQuantity(item.id),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () => _showQuantityEditDialog(context, cartProvider, item),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.grey.shade300),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              '${item.quantity}',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                             ),
                                           ),
-                                          IconButton(onPressed: () => cartProvider.increaseQuantity(item.id), icon: const Icon(Icons.add, color: Colors.green, size: 20)),
-                                          IconButton(onPressed: () => cartProvider.removeItem(item.id), icon: const Icon(Icons.delete, color: Colors.grey, size: 20)),
-                                        ],
-                                      )
-                                    else
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          IconButton(onPressed: () => cartProvider.decreaseQuantity(item.id), icon: const Icon(Icons.remove, color: Colors.red, size: 20)),
-                                          GestureDetector(
-                                            onTap: () => _showQuantityEditDialog(context, cartProvider, item),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                                              child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                            ),
-                                          ),
-                                          IconButton(onPressed: () => cartProvider.increaseQuantity(item.id), icon: const Icon(Icons.add, color: Colors.green, size: 20)),
-                                          IconButton(onPressed: () => cartProvider.removeItem(item.id), icon: const Icon(Icons.delete, color: Colors.grey, size: 20)),
-                                        ],
-                                      ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.add, color: Colors.green, size: 20),
+                                          onPressed: () => cartProvider.increaseQuantity(item.id),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.grey, size: 20),
+                                          onPressed: () => cartProvider.removeItem(item.id),
+                                        ),
+                                      ],
+                                    ),
                                   ],
                                 ),
                               ),
@@ -203,33 +242,6 @@ class _CartScreenState extends State<CartScreen> {
           ),
         );
       },
-    );
-  }
-
-  void _showQuantityEditDialog(BuildContext context, CartProvider cartProvider, CartItem item) {
-    TextEditingController controller = TextEditingController(text: item.quantity.toString());
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('تعديل الكمية'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: 'الكمية', border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              int newQty = int.tryParse(controller.text) ?? 1;
-              if (newQty < 1) newQty = 1;
-              cartProvider.updateQuantity(item.id, newQty);
-              Navigator.pop(ctx);
-            },
-            child: Text('تطبيق'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -345,11 +357,11 @@ class _CartScreenState extends State<CartScreen> {
                 onPressed: () async {
                   try {
                     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-                    
+
                     for (var entry in itemsByCompany.entries) {
                       final items = entry.value;
                       final paymentOpt = _paymentOptions[entry.key]!;
-                      
+
                       orderProvider.addOrders(
                         items,
                         totalPrice,
@@ -362,7 +374,7 @@ class _CartScreenState extends State<CartScreen> {
                         creditDays: paymentOpt['creditDays'],
                       );
                     }
-                    
+
                     cartProvider.clearCart();
                     _paymentOptions.clear();
                     if (mounted) {

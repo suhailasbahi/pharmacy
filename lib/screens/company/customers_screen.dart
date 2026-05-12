@@ -23,65 +23,27 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _loadCustomers() async {
-    setState(() => _isLoading = true);
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    await accountProvider.loadCustomers();
-    final auth = Provider.of<AuthService>(context, listen: false);
-    List<CustomerAccount> customers = accountProvider.customers;
-    final effectiveBranchId = auth.getEffectiveBranchId();
-    if (effectiveBranchId != null) {
-      customers = customers.where((c) => c.branchId == effectiveBranchId).toList();
-    }
-    setState(() {
-      _customers = customers;
-      _isLoading = false;
-    });
+  setState(() => _isLoading = true);
+  final auth = Provider.of<AuthService>(context, listen: false);
+  final companyId = auth.currentCompanyId ?? 'comp_001';
+  final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+  await accountProvider.loadCustomersForCompany(companyId);
+  List<CustomerAccount> customers = accountProvider.customers;
+  final effectiveBranchId = auth.getEffectiveBranchId();
+  if (effectiveBranchId != null) {
+    customers = customers.where((c) => c.branchId == effectiveBranchId).toList();
   }
+  setState(() {
+    _customers = customers;
+    _isLoading = false;
+  });
+}
 
   Future<void> _refresh() async {
     await _loadCustomers();
   }
 
-  void _addCustomer() {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة عميل جديد'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'اسم الصيدلية')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'الهاتف')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              final auth = Provider.of<AuthService>(context, listen: false);
-              final newCustomer = CustomerAccount(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                pharmacyId: 'cid_${DateTime.now().millisecondsSinceEpoch}',
-                pharmacyName: nameController.text.trim(),
-                phone: phoneController.text.trim(),
-                balance: 0,
-                createdAt: DateTime.now(),
-                branchId: auth.getEffectiveBranchId(),
-              );
-              await Provider.of<AccountProvider>(context, listen: false).addCustomer(newCustomer);
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة العميل')));
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
-    );
-  }
-
+  
   void _editCustomer(CustomerAccount customer) {
     final nameController = TextEditingController(text: customer.pharmacyName);
     final phoneController = TextEditingController(text: customer.phone);
@@ -283,11 +245,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 },
               ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addCustomer,
-        child: const Icon(Icons.add),
-        backgroundColor: Colors.teal,
-      ),
+      
     );
   }
 

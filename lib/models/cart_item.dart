@@ -46,14 +46,13 @@ class CartItem {
   });
 
   factory CartItem.fromProduct(ProductModel product, String regionId, {bool isCashOrder = true, String? overriddenCompanyName}) {
-      // جلب السعر بعد تطبيق الضريبة أو العرض حسب المنطقة
-  final regionPrice = product.getFinalPriceForRegion(regionId);
-  double effectivePricePerPiece = product.pricePerPiece;
-  double effectivePricePerCarton = product.pricePerCarton;
-
+  // 1. احصل على السعر النهائي لهذه المنطقة (بعد الضريبة)
+  double regionPrice = product.getFinalPriceForRegion(regionId);
   
-  // الـ regionPrice هو سعر الوحدة الافتراضية للمنتج. نحتاج إلى تحويله إلى سعر القطعة والكرتون.
-  // أبسط طريقة: نفترض أن regionPrice هو سعر الوحدة الافتراضية (باكيت أو كرتون) مع مراعاة العرض.
+  double effectivePricePerPiece;
+  double effectivePricePerCarton;
+  
+  // 2. حدد سعر الوحدة حسب الوحدة الافتراضية للمنتج
   if (product.defaultUnit == 'piece') {
     effectivePricePerPiece = regionPrice;
     effectivePricePerCarton = regionPrice * product.piecesPerCarton;
@@ -61,15 +60,19 @@ class CartItem {
     effectivePricePerCarton = regionPrice;
     effectivePricePerPiece = regionPrice / product.piecesPerCarton;
   }
-
-  // تطبيق العرض الخاص إذا كان موجوداً (اختياري)
+  
+  // 3. إذا كان هناك عرض خاص، تجاوز السعر (قد يكون العرض عالمياً وليس حسب المنطقة)
+  //    لاحظ: العرض يجب أن يطبق على المنتج في Firestore بشكل منفصل
   if (product.hasOffer && product.offerPrice != null) {
     if (product.defaultUnit == 'piece') {
       effectivePricePerPiece = product.offerPrice!;
+      effectivePricePerCarton = product.offerPrice! * product.piecesPerCarton;
     } else {
       effectivePricePerCarton = product.offerPrice!;
+      effectivePricePerPiece = product.offerPrice! / product.piecesPerCarton;
     }
-  }
+
+      }
 
     
     return CartItem(

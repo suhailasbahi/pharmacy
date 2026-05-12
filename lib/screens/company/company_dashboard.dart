@@ -15,10 +15,36 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
   String _selectedCity = 'all';
   List<OrderModel> _orders = [];
   bool _isLoading = true;
+  List<String> _cities = [];
 
-  List<String> get availableCities {
-    final cities = _orders.map((o) => o.pharmacyCity).toSet().toList();
-    return ['all', ...cities];
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final branchId = auth.getEffectiveBranchId();
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    final citiesSet = <String>{};
+    for (var order in orders) {
+      if (order.pharmacyCity.isNotEmpty) {
+        citiesSet.add(order.pharmacyCity);
+      }
+    }
+    setState(() {
+      _orders = orders;
+      _cities = ['all', ...citiesSet.toList()];
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await _loadOrders();
   }
 
   List<OrderModel> get filteredOrders {
@@ -36,29 +62,6 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
   int get shippedCount => filteredOrders.where((o) => o.status == 'shipped').length;
   int get deliveredCount => filteredOrders.where((o) => o.status == 'delivered').length;
   int get rejectedCount => filteredOrders.where((o) => o.status == 'rejected').length;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadOrders();
-  }
-
-  Future<void> _loadOrders() async {
-    setState(() => _isLoading = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final branchId = auth.getEffectiveBranchId();
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
-    setState(() {
-      _orders = orders;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _refresh() async {
-    await _loadOrders();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +137,7 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
                         child: DropdownButton<String>(
                           value: _selectedCity,
                           isExpanded: true,
-                          items: availableCities.map((city) {
+                          items: _cities.map((city) {
                             return DropdownMenuItem(
                               value: city,
                               child: Text(city == 'all' ? 'جميع المدن' : city),
@@ -194,6 +197,9 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
     );
   }
 }
+
+// DashboardOrderCard كما هو (لم يتغير) ...
+// (نفس الكود السابق)
 
 class DashboardOrderCard extends StatefulWidget {
   final OrderModel order;

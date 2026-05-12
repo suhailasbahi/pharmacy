@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Fixed import
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/permissions.dart';
 import '../models/user_model.dart';
+import '../models/region.dart';
 
 class AuthService extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -33,7 +34,7 @@ class AuthService extends ChangeNotifier {
   String? get currentBranchId => _currentBranchId;
   bool get isCompanyOwner => _currentUserType == 'company';
 
-  // ========== الصلاحيات (مؤقتة) ==========
+  // ========== الصلاحيات (مؤقتة، ستُقرأ من Firestore لاحقاً) ==========
   List<String> get permissions => isCompanyOwner ? allPermissions : [];
   bool hasPermission(String permission) => isCompanyOwner;
   bool get canViewAllProducts => isCompanyOwner;
@@ -62,10 +63,17 @@ class AuthService extends ChangeNotifier {
   bool get canViewInventory => isCompanyOwner;
   bool get canAdjustInventory => isCompanyOwner;
 
-  // ========== دوال الفرع ==========
-  bool get isBranchManager =>
-      _currentRoleId == 'role_branch_manager' && _currentBranchId != null;
+  // ========== دوال الفرع والمناطق ==========
+  bool get isBranchManager => _currentRoleId == 'role_branch_manager' && _currentBranchId != null;
   String? getEffectiveBranchId() => isBranchManager ? _currentBranchId : null;
+
+  // المناطق المسموحة للمستخدم (إذا كان مدير فرع أو مندوب)
+  List<String> getEffectiveRegions() {
+    if (isCompanyOwner) {
+      return Region.allRegions.map((r) => r.id).toList();
+    }
+    return _currentUserModel?.assignedRegions ?? [];
+  }
 
   // ========== Guest mode ==========
   void enterAsGuest(String regionId) {
@@ -80,45 +88,38 @@ class AuthService extends ChangeNotifier {
     _currentPermissions = [];
     _currentCustomPermissions = [];
     _currentBranchId = null;
-      _currentCompanyName = null;
+    _currentCompanyName = null;
     notifyListeners();
   }
 
-  // ========== تسجيل الدخول باستخدام Firebase Auth ==========
+  // ========== تسجيل الدخول ==========
   Future<void> login(String email, String password) async {
-  try {
-    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    print("✅ Login successful: ${userCredential.user?.uid}");
-   
+    try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       String uid = userCredential.user!.uid;
-      DocumentSnapshot doc =
-          await _firestore.collection('users').doc(uid).get();
+      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
       if (!doc.exists) throw Exception('المستخدم غير موجود في قاعدة البيانات');
       Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      
-    if (data['isDeleted'] == true) {
-  throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
-}
+      if (data['isDeleted'] == true) throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
+
       _currentUserModel = UserModel.fromMap(uid, data);
       _currentUserType = _currentUserModel!.userType;
-      _currentCompanyId =
-          _currentUserModel!.parentCompanyId ?? _currentUserModel!.companyId;
-      _currentCompanyName = _currentUserModel!.name;
+      _currentCompanyId = _currentUserModel!.parentCompanyId ?? _currentUserModel!.companyId;
       _currentPharmacyName = _currentUserModel!.name;
-      _currentRegionId = _currentUserModel!.address;
+      _currentRegionId = _currentUserModel!.regionId ?? 'sanaa';
       _currentRoleId = _currentUserModel!.roleId;
       _currentPermissions = await _getRolePermissions(_currentRoleId!);
       _currentCustomPermissions = _currentUserModel!.customPermissions;
       _currentBranchId = _currentUserModel!.branchId;
+      _currentCompanyName = _currentUserModel!.name;
       _isLoggedIn = true;
       _isGuest = false;
       notifyListeners();
     } catch (e) {
-    print("❌ Login error: $e");
-    throw Exception('فشل تسجيل الدخول: ${e.toString()}');
+      throw Exception('فشل تسجيل الدخول: ${e.toString()}');
     }
   }
 
@@ -134,8 +135,7 @@ class AuthService extends ChangeNotifier {
     String? address,
   }) async {
     try {
-      UserCredential userCredential =
-          await _auth.createUserWithEmailAndPassword(
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -155,6 +155,8 @@ class AuthService extends ChangeNotifier {
         licenseNumber: licenseNumber,
         isApproved: userType == 'pharmacy' ? false : true,
         address: address,
+        regionId: regionId,
+        assignedRegions: userType == 'company' ? Region.allRegions.map((r) => r.id).toList() : [],
       );
       await _firestore.collection('users').doc(uid).set(newUser.toMap());
       await login(email, password);
@@ -177,22 +179,14 @@ class AuthService extends ChangeNotifier {
     _currentPermissions = [];
     _currentCustomPermissions = [];
     _currentBranchId = null;
+    _currentCompanyName = null;
     notifyListeners();
   }
-    // حذف حساب
-    Future<void> deleteAccount() async {
-  final user = _auth.currentUser;
-  if (user == null) throw Exception('لا يوجد مستخدم مسجل');
-  await _firestore.collection('users').doc(user.uid).update({'isDeleted': true});
-  await user.delete(); // حذف من Firebase Auth
-  await logout();
-}
 
   // ========== مساعدة ==========
   Future<List<String>> _getRolePermissions(String roleId) async {
     try {
-      DocumentSnapshot roleDoc =
-          await _firestore.collection('roles').doc(roleId).get();
+      DocumentSnapshot roleDoc = await _firestore.collection('roles').doc(roleId).get();
       if (roleDoc.exists) {
         Map<String, dynamic> data = roleDoc.data() as Map<String, dynamic>;
         return List<String>.from(data['defaultPermissions'] ?? []);

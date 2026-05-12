@@ -7,6 +7,7 @@ import '../../models/product_model.dart';
 import '../../models/region_pricing.dart';
 import '../../models/bonus_model.dart';
 import '../../models/agency_model.dart';
+import '../../models/region.dart';
 import '../../services/auth_service.dart';
 import '../../providers/product_provider.dart';
 
@@ -38,34 +39,29 @@ class _AddProductScreenState extends State<AddProductScreen> {
   AgencyModel? _selectedAgency;
   List<AgencyModel> _agencies = [];
   final ImagePicker _picker = ImagePicker();
-
-  final List<Map<String, String>> regions = [
-    {'id': 'sanaa', 'name': 'صنعاء'},
-    {'id': 'aden', 'name': 'عدن'},
-    {'id': 'taiz', 'name': 'تعز'},
-    {'id': 'hodeidah', 'name': 'الحديدة'},
-    {'id': 'ibb', 'name': 'إب'},
-    {'id': 'mukalla', 'name': 'المكلا'},
-    {'id': 'sayun', 'name': 'سيئون'},
-  ];
+  final List<Region> _regions = Region.allRegions;
 
   @override
   void initState() {
     super.initState();
-    _regionPrices = regions.map((reg) => RegionPricing(regionId: reg['id']!, regionName: reg['name']!, price: 0, currency: 'yemen')).toList();
+    _regionPrices = _regions.map((reg) => RegionPricing(regionId: reg.id, regionName: reg.name, price: 0, currency: 'yemen')).toList();
     _loadAgencies();
   }
 
   Future<void> _loadAgencies() async {
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final snapshot = await FirebaseFirestore.instance
-        .collection('agencies')
-        .where('companyId', isEqualTo: companyId)
-        .get();
-    setState(() {
-      _agencies = snapshot.docs.map((doc) => AgencyModel.fromMap(doc.id, doc.data())).toList();
-    });
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final companyId = auth.currentCompanyId ?? 'comp_001';
+      final snapshot = await FirebaseFirestore.instance
+          .collection('agencies')
+          .where('companyId', isEqualTo: companyId)
+          .get();
+      setState(() {
+        _agencies = snapshot.docs.map((doc) => AgencyModel.fromMap(doc.id, doc.data())).toList();
+      });
+    } catch (e) {
+      print("Error loading agencies: $e");
+    }
   }
 
   Future<void> _pickImage() async {
@@ -102,7 +98,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _defaultUnit = 'piece';
       _bonusCash = null;
       _bonusCredit = null;
-      _regionPrices = regions.map((reg) => RegionPricing(regionId: reg['id']!, regionName: reg['name']!, price: 0, currency: 'yemen')).toList();
+      _regionPrices = _regions.map((reg) => RegionPricing(regionId: reg.id, regionName: reg.name, price: 0, currency: 'yemen')).toList();
     });
   }
 
@@ -122,53 +118,62 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
     setState(() => _isLoading = true);
 
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final agencyId = _selectedAgency!.id;
-
-    final newProduct = ProductModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      companyId: auth.currentCompanyId ?? 'comp_001',
-      companyName: auth.currentCompanyName ?? 'شركة الأدوية العربية',
-      agencyId: agencyId,
-      name: _nameController.text.trim(),
-      scientificName: _scientificNameController.text.trim(),
-      concentration: _concentrationController.text.trim(),
-      stockQuantity: int.parse(_stockController.text),
-      requiresCooling: _requiresCooling,
-      imageUrl: _selectedImage?.path,
-      expiryDate: _expiryDate!,
-      isActive: true,
-      createdAt: DateTime.now(),
-      regionPrices: _regionPrices,
-      bonusCash: _bonusCash,
-      bonusCredit: _bonusCredit,
-      pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
-      pricePerCarton: double.tryParse(_pricePerCartonController.text) ?? 0,
-      piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
-      defaultUnit: _defaultUnit,
-      minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
-      hasOffer: _hasOffer,
-      offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
-      createdBy: auth.currentUserId,
-    );
-
     try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final agencyId = _selectedAgency!.id;
+      final companyId = auth.currentCompanyId ?? 'comp_001';
+      final companyName = auth.currentCompanyName ?? 'شركة الأدوية العربية';
+
+      final newProduct = ProductModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        companyId: companyId,
+        companyName: companyName,
+        agencyId: agencyId,
+        name: _nameController.text.trim(),
+        scientificName: _scientificNameController.text.trim(),
+        concentration: _concentrationController.text.trim(),
+        stockQuantity: int.parse(_stockController.text),
+        requiresCooling: _requiresCooling,
+        imageUrl: _selectedImage?.path,
+        expiryDate: _expiryDate!,
+        isActive: true,
+        createdAt: DateTime.now(),
+        regionPrices: _regionPrices,
+        bonusCash: _bonusCash,
+        bonusCredit: _bonusCredit,
+        pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
+        pricePerCarton: double.tryParse(_pricePerCartonController.text) ?? 0,
+        piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
+        defaultUnit: _defaultUnit,
+        minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
+        hasOffer: _hasOffer,
+        offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
+        createdBy: auth.currentUserId,
+      );
+
       final productProvider = Provider.of<ProductProvider>(context, listen: false);
       await productProvider.addProduct(newProduct);
       _clearForm();
       _showSnackBar('تم إضافة المنتج بنجاح', Colors.green);
-     
-    } catch (e) {
+      // لا نغلق الشاشة تلقائياً، يبقى المستخدم في نفس الشاشة
+    } catch (e, stackTrace) {
+      print("Error adding product: $e");
+      print(stackTrace);
       _showSnackBar('حدث خطأ: ${e.toString()}', Colors.red);
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('إضافة دواء جديد'), automaticallyImplyLeading: false, centerTitle: true, backgroundColor: Colors.teal),
+      appBar: AppBar(
+        title: const Text('إضافة دواء جديد'),
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -215,6 +220,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
+  // ===================== واجهات المستخدم (UI) =====================
   Widget _buildOfferSection() {
     return Card(
       child: ExpansionTile(
@@ -325,17 +331,41 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   DataCell(TextField(
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'السعر'),
-                    onChanged: (val) => setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: double.tryParse(val) ?? 0, currency: rp.currency, taxRate: rp.taxRate)),
+                    onChanged: (val) => setState(() {
+                      _regionPrices[idx] = RegionPricing(
+                        regionId: rp.regionId,
+                        regionName: rp.regionName,
+                        price: double.tryParse(val) ?? 0,
+                        currency: rp.currency,
+                        taxRate: rp.taxRate,
+                      );
+                    }),
                   )),
                   DataCell(DropdownButton<String>(
                     value: rp.currency,
                     items: const [DropdownMenuItem(value: 'yemen', child: Text('ريال يمني')), DropdownMenuItem(value: 'saudi', child: Text('ريال سعودي')), DropdownMenuItem(value: 'dollar', child: Text('دولار'))],
-                    onChanged: (val) => setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: rp.price, currency: val!, taxRate: rp.taxRate)),
+                    onChanged: (val) => setState(() {
+                      _regionPrices[idx] = RegionPricing(
+                        regionId: rp.regionId,
+                        regionName: rp.regionName,
+                        price: rp.price,
+                        currency: val!,
+                        taxRate: rp.taxRate,
+                      );
+                    }),
                   )),
                   DataCell(TextField(
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: '%'),
-                    onChanged: (val) => setState(() => _regionPrices[idx] = RegionPricing(regionId: rp.regionId, regionName: rp.regionName, price: rp.price, currency: rp.currency, taxRate: double.tryParse(val) ?? 0)),
+                    onChanged: (val) => setState(() {
+                      _regionPrices[idx] = RegionPricing(
+                        regionId: rp.regionId,
+                        regionName: rp.regionName,
+                        price: rp.price,
+                        currency: rp.currency,
+                        taxRate: double.tryParse(val) ?? 0,
+                      );
+                    }),
                   )),
                 ]);
               }).toList(),

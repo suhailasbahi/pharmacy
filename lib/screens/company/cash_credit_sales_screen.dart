@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/order_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
+import '../../models/region.dart';
 
 class CashCreditSalesScreen extends StatefulWidget {
   const CashCreditSalesScreen({Key? key}) : super(key: key);
@@ -12,11 +13,11 @@ class CashCreditSalesScreen extends StatefulWidget {
 }
 
 class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
-  String _selectedRegion = 'all';
-  List<String> regions = [];
+  String _selectedRegionId = 'all';
   DateTimeRange? _dateRange;
-  List<OrderModel> _orders = [];
+  List<OrderModel> _allOrders = [];
   bool _isLoading = true;
+  List<Region> _regions = [];
 
   @override
   void initState() {
@@ -30,16 +31,29 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     final companyId = auth.currentCompanyId ?? 'comp_001';
     final branchId = auth.getEffectiveBranchId();
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    var orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
     if (_dateRange != null) {
       orders = orders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
-    final cities = orders.map((o) => o.pharmacyCity).toSet().toList();
+    final Set<String> regionIds = {};
+    final List<Region> allRegions = Region.allRegions;
+    for (var order in orders) {
+      final city = order.pharmacyCity;
+      final matchedRegion = allRegions.firstWhere(
+        (r) => r.name == city,
+        orElse: () => const Region('other', 'أخرى'),
+      );
+      if (matchedRegion.id != 'other') {
+        regionIds.add(matchedRegion.id);
+      }
+    }
+    final regionsList = regionIds.map((id) => allRegions.firstWhere((r) => r.id == id)).toList();
+    regionsList.sort((a, b) => a.name.compareTo(b.name));
     setState(() {
-      _orders = orders;
-      regions = ['all', ...cities];
+      _allOrders = orders;
+      _regions = regionsList;
       _isLoading = false;
     });
   }
@@ -64,15 +78,26 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return  Scaffold(
-        appBar: AppBar(title: Text('تفصيل المبيعات (نقدي/آجل)'), centerTitle: true, backgroundColor: Colors.teal),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('تفصيل المبيعات (نقدي / آجل)'),
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
+    }
+
+    List<OrderModel> orders = _allOrders;
+    if (_selectedRegionId != 'all') {
+      final regionName = Region.getNameById(_selectedRegionId);
+      orders = orders.where((o) => o.pharmacyCity == regionName).toList();
     }
 
     double totalCash = 0, totalCredit = 0;
     Map<String, double> cashByRegion = {}, creditByRegion = {};
-    for (var order in _orders) {
+
+    for (var order in orders) {
       final region = order.pharmacyCity;
       final amount = order.totalPrice;
       if (order.paymentType == 'cash') {
@@ -83,12 +108,19 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         creditByRegion[region] = (creditByRegion[region] ?? 0) + amount;
       }
     }
+
     double total = totalCash + totalCredit;
     double cashPercent = total == 0 ? 0 : (totalCash / total) * 100;
     double creditPercent = total == 0 ? 0 : (totalCredit / total) * 100;
-    List<String> displayRegions = _selectedRegion == 'all'
-        ? [...cashByRegion.keys.toSet(), ...creditByRegion.keys.toSet()].toSet().toList()
-        : [_selectedRegion];
+
+    // جمع المناطق من البيانات الفعلية
+    final Set<String> allRegionNames = {
+      ...cashByRegion.keys,
+      ...creditByRegion.keys,
+    };
+    List<String> displayRegions = _selectedRegionId == 'all'
+        ? allRegionNames.toList()
+        : [_selectedRegionId == 'all' ? 'all' : Region.getNameById(_selectedRegionId)];
 
     return Scaffold(
       appBar: AppBar(
@@ -96,7 +128,11 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: _selectDateRange,
+            tooltip: 'تحديد فترة',
+          ),
         ],
       ),
       body: RefreshIndicator(
@@ -124,13 +160,16 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: DropdownButtonFormField<String>(
-                value: _selectedRegion,
+                value: _selectedRegionId,
                 decoration: const InputDecoration(labelText: 'تصفية حسب المحافظة'),
                 items: [
                   const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
-                  ...regions.where((r) => r != 'all').map((r) => DropdownMenuItem(value: r, child: Text(r))),
+                  ..._regions.map((region) => DropdownMenuItem(
+                        value: region.id,
+                        child: Text(region.name),
+                      )),
                 ],
-                onChanged: (val) => setState(() => _selectedRegion = val!),
+                onChanged: (val) => setState(() => _selectedRegionId = val!),
               ),
             ),
             Card(
@@ -186,7 +225,10 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     return Container(
       width: 120,
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         children: [
           Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),

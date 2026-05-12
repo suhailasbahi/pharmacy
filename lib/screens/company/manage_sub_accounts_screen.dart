@@ -5,6 +5,7 @@ import '../../providers/role_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import '../../models/permissions.dart';
+import '../../models/region.dart';
 
 class ManageSubAccountsScreen extends StatefulWidget {
   const ManageSubAccountsScreen({Key? key}) : super(key: key);
@@ -28,7 +29,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
     final companyId = auth.currentCompanyId ?? 'comp_001';
     final userProvider = Provider.of<UserManagementProvider>(context, listen: false);
-    await userProvider.loadSampleData(companyId);
+    await userProvider.loadSubAccounts(companyId);
     List<UserModel> users = userProvider.subAccounts;
     final effectiveBranchId = auth.getEffectiveBranchId();
     if (effectiveBranchId != null) {
@@ -50,6 +51,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
     final phoneController = TextEditingController();
     String? selectedRoleId;
     List<String> customPermissions = [];
+    List<String> selectedRegionIds = [];
 
     showDialog(
       context: context,
@@ -58,7 +60,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
         content: SizedBox(
           width: double.maxFinite,
           child: StatefulBuilder(
-            builder: (ctx, setStateDialog) {
+            builder: (ctx, setDialogState) {
               final roleProvider = Provider.of<RoleProvider>(context, listen: false);
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -73,11 +75,35 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
                     items: roleProvider.roles.map((role) {
                       return DropdownMenuItem(value: role.id, child: Text(role.name));
                     }).toList(),
-                    onChanged: (val) => setStateDialog(() => selectedRoleId = val),
+                    onChanged: (val) => setDialogState(() => selectedRoleId = val),
                   ),
                   if (selectedRoleId != null)
                     Column(
                       children: [
+                        const Divider(),
+                        const Text('المناطق المسموحة:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Container(
+                          height: 150,
+                          child: ListView.builder(
+                            itemCount: Region.allRegions.length,
+                            itemBuilder: (ctx2, idx) {
+                              final region = Region.allRegions[idx];
+                              return CheckboxListTile(
+                                title: Text(region.name),
+                                value: selectedRegionIds.contains(region.id),
+                                onChanged: (val) {
+                                  if (val == true) {
+                                    selectedRegionIds.add(region.id);
+                                  } else {
+                                    selectedRegionIds.remove(region.id);
+                                  }
+                                  setDialogState(() {});
+                                },
+                              );
+                            },
+                          ),
+                        ),
                         const Divider(),
                         const Text('صلاحيات إضافية (اختيارية)', style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
@@ -96,7 +122,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
                                   } else {
                                     customPermissions.remove(perm);
                                   }
-                                  setStateDialog(() {});
+                                  setDialogState(() {});
                                 },
                               );
                             },
@@ -113,6 +139,12 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () async {
+              if (selectedRoleId == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('يرجى اختيار الدور'), backgroundColor: Colors.orange),
+                );
+                return;
+              }
               final auth = Provider.of<AuthService>(context, listen: false);
               final newUser = UserModel(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -125,6 +157,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
                 roleId: selectedRoleId!,
                 customPermissions: customPermissions,
                 createdAt: DateTime.now(),
+                assignedRegions: selectedRegionIds,
               );
               await Provider.of<UserManagementProvider>(context, listen: false).addSubAccount(newUser);
               Navigator.pop(ctx);
@@ -144,6 +177,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
     final phoneController = TextEditingController(text: user.phone);
     String? selectedRoleId = user.roleId;
     List<String> customPermissions = List.from(user.customPermissions);
+    List<String> selectedRegionIds = List.from(user.assignedRegions);
 
     showDialog(
       context: context,
@@ -152,7 +186,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
         content: SizedBox(
           width: double.maxFinite,
           child: StatefulBuilder(
-            builder: (ctx, setStateDialog) {
+            builder: (ctx, setDialogState) {
               final roleProvider = Provider.of<RoleProvider>(context, listen: false);
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -167,7 +201,31 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
                     items: roleProvider.roles.map((role) {
                       return DropdownMenuItem(value: role.id, child: Text(role.name));
                     }).toList(),
-                    onChanged: (val) => setStateDialog(() => selectedRoleId = val),
+                    onChanged: (val) => setDialogState(() => selectedRoleId = val),
+                  ),
+                  const Divider(),
+                  const Text('المناطق المسموحة:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 150,
+                    child: ListView.builder(
+                      itemCount: Region.allRegions.length,
+                      itemBuilder: (ctx2, idx) {
+                        final region = Region.allRegions[idx];
+                        return CheckboxListTile(
+                          title: Text(region.name),
+                          value: selectedRegionIds.contains(region.id),
+                          onChanged: (val) {
+                            if (val == true) {
+                              selectedRegionIds.add(region.id);
+                            } else {
+                              selectedRegionIds.remove(region.id);
+                            }
+                            setDialogState(() {});
+                          },
+                        );
+                      },
+                    ),
                   ),
                   const Divider(),
                   const Text('الصلاحيات الإضافية', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -187,7 +245,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
                             } else {
                               customPermissions.remove(perm);
                             }
-                            setStateDialog(() {});
+                            setDialogState(() {});
                           },
                         );
                       },
@@ -214,6 +272,7 @@ class _ManageSubAccountsScreenState extends State<ManageSubAccountsScreen> {
                 customPermissions: customPermissions,
                 isActive: user.isActive,
                 createdAt: user.createdAt,
+                assignedRegions: selectedRegionIds,
               );
               await Provider.of<UserManagementProvider>(context, listen: false).updateSubAccount(updatedUser);
               Navigator.pop(ctx);

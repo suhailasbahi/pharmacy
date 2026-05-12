@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/order_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
+import '../../models/region.dart';
 
 class SalesByRegionScreen extends StatefulWidget {
   const SalesByRegionScreen({Key? key}) : super(key: key);
@@ -12,11 +13,11 @@ class SalesByRegionScreen extends StatefulWidget {
 }
 
 class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
-  String _selectedRegion = 'all';
-  List<String> regions = [];
+  String _selectedRegionId = 'all';
   DateTimeRange? _dateRange;
-  List<OrderModel> _orders = [];
+  List<OrderModel> _allOrders = [];
   bool _isLoading = true;
+  List<Region> _regions = [];
 
   @override
   void initState() {
@@ -30,16 +31,30 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
     final companyId = auth.currentCompanyId ?? 'comp_001';
     final branchId = auth.getEffectiveBranchId();
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    var orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
     if (_dateRange != null) {
       orders = orders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
-    final cities = orders.map((o) => o.pharmacyCity).toSet().toList();
+    final Set<String> regionIds = {};
+    final List<Region> allRegions = Region.allRegions;
+    for (var order in orders) {
+      final city = order.pharmacyCity;
+      // محاولة مطابقة اسم المدينة مع معرف المنطقة
+      final matchedRegion = allRegions.firstWhere(
+        (r) => r.name == city,
+        orElse: () => const Region('other', 'أخرى'),
+      );
+      if (matchedRegion.id != 'other') {
+        regionIds.add(matchedRegion.id);
+      }
+    }
+    final regionsList = regionIds.map((id) => allRegions.firstWhere((r) => r.id == id)).toList();
+    regionsList.sort((a, b) => a.name.compareTo(b.name));
     setState(() {
-      _orders = orders;
-      regions = ['all', ...cities];
+      _allOrders = orders;
+      _regions = regionsList;
       _isLoading = false;
     });
   }
@@ -64,32 +79,39 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return  Scaffold(
-        appBar: AppBar(title: Text('المبيعات حسب المحافظة'), centerTitle: true, backgroundColor: Colors.teal),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('المبيعات حسب المحافظة'),
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
+    }
+
+    List<OrderModel> orders = _allOrders;
+    if (_selectedRegionId != 'all') {
+      final regionName = Region.getNameById(_selectedRegionId);
+      orders = orders.where((o) => o.pharmacyCity == regionName).toList();
     }
 
     Map<String, double> salesByRegion = {};
     Map<String, Map<String, double>> cashCreditByRegion = {};
 
-    for (var order in _orders) {
-      final region = order.pharmacyCity;
+    for (var order in orders) {
+      final city = order.pharmacyCity;
       final amount = order.totalPrice;
-      salesByRegion[region] = (salesByRegion[region] ?? 0) + amount;
-      cashCreditByRegion.putIfAbsent(region, () => {'cash': 0.0, 'credit': 0.0});
+      salesByRegion[city] = (salesByRegion[city] ?? 0) + amount;
+      cashCreditByRegion.putIfAbsent(city, () => {'cash': 0.0, 'credit': 0.0});
       if (order.paymentType == 'cash') {
-        cashCreditByRegion[region]!['cash'] = (cashCreditByRegion[region]!['cash'] ?? 0) + amount;
+        cashCreditByRegion[city]!['cash'] = (cashCreditByRegion[city]!['cash'] ?? 0) + amount;
       } else {
-        cashCreditByRegion[region]!['credit'] = (cashCreditByRegion[region]!['credit'] ?? 0) + amount;
+        cashCreditByRegion[city]!['credit'] = (cashCreditByRegion[city]!['credit'] ?? 0) + amount;
       }
     }
 
-    List<MapEntry<String, double>> entries = salesByRegion.entries.toList();
+    final entries = salesByRegion.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
-    if (_selectedRegion != 'all') {
-      entries = entries.where((e) => e.key == _selectedRegion).toList();
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -125,13 +147,16 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
             Padding(
               padding: const EdgeInsets.all(12),
               child: DropdownButtonFormField<String>(
-                value: _selectedRegion,
-                decoration: const InputDecoration(labelText: 'تصفية حسب المحافظة'),
+                value: _selectedRegionId,
+                decoration: const InputDecoration(labelText: 'اختر المحافظة'),
                 items: [
                   const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
-                  ...regions.where((r) => r != 'all').map((r) => DropdownMenuItem(value: r, child: Text(r))),
+                  ..._regions.map((region) => DropdownMenuItem(
+                        value: region.id,
+                        child: Text(region.name),
+                      )),
                 ],
-                onChanged: (val) => setState(() => _selectedRegion = val!),
+                onChanged: (val) => setState(() => _selectedRegionId = val!),
               ),
             ),
             Expanded(
@@ -147,12 +172,12 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
                           DataColumn(label: Text('آجل')),
                         ],
                         rows: entries.map((entry) {
-                          final region = entry.key;
+                          final city = entry.key;
                           final total = entry.value;
-                          final cash = cashCreditByRegion[region]?['cash'] ?? 0;
-                          final credit = cashCreditByRegion[region]?['credit'] ?? 0;
+                          final cash = cashCreditByRegion[city]?['cash'] ?? 0;
+                          final credit = cashCreditByRegion[city]?['credit'] ?? 0;
                           return DataRow(cells: [
-                            DataCell(Text(region)),
+                            DataCell(Text(city)),
                             DataCell(Text('${total.toStringAsFixed(2)}')),
                             DataCell(Text('${cash.toStringAsFixed(2)}')),
                             DataCell(Text('${credit.toStringAsFixed(2)}')),

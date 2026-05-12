@@ -3,7 +3,7 @@ class UserModel {
   final String email;
   final String name;
   final String phone;
-  final String userType; // 'company', 'pharmacy', 'sub_account'
+  final String userType;
   final String? parentCompanyId;
   final String? branchId;
   final String roleId;
@@ -13,9 +13,11 @@ class UserModel {
   final String? licenseNumber;
   final String? licenseImageUrl;
   final bool isApproved;
-  final String? address;
+  final String? address;        // العنوان التفصيلي (مثال: "شارع التعاون، صنعاء")
   final String? companyId;
-  final bool isDeleted;
+  final String? regionId;        // جديد: معرف المنطقة (مثل 'sanaa', 'aden')
+    
+    final List<String> assignedRegions; // جديد (قائمة معرفات المناطق)
 
   UserModel({
     required this.id,
@@ -34,7 +36,8 @@ class UserModel {
     this.isApproved = false,
     this.address,
     this.companyId,
-      this.isDeleted = false,
+    this.regionId,
+    this.assignedRegions = const [],
   });
 
   Map<String, dynamic> toMap() {
@@ -53,6 +56,9 @@ class UserModel {
       'licenseImageUrl': licenseImageUrl,
       'isApproved': isApproved,
       'address': address,
+      'companyId': companyId,
+      'regionId': regionId,
+      'assignedRegions': assignedRegions,
     };
   }
 
@@ -67,14 +73,15 @@ class UserModel {
       branchId: map['branchId'],
       roleId: map['roleId'] ?? '',
       customPermissions: List<String>.from(map['customPermissions'] ?? []),
-       
       isActive: map['isActive'] ?? true,
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
       licenseNumber: map['licenseNumber'],
       licenseImageUrl: map['licenseImageUrl'],
       isApproved: map['isApproved'] ?? false,
       address: map['address'],
-      companyId: map['companyId']
+      companyId: map['companyId'],
+      regionId: map['regionId'],
+      assignedRegions: List<String>.from(map['assignedRegions'] ?? []),
     );
   }
 }

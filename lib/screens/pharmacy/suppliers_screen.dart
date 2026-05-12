@@ -35,46 +35,6 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     await _loadSuppliers();
   }
 
-  void _addSupplier() {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final emailController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إضافة مورد جديد'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'الاسم')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'الهاتف')),
-            TextField(controller: emailController, decoration: const InputDecoration(labelText: 'البريد الإلكتروني (اختياري)')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              final newSupplier = SupplierAccount(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                name: nameController.text.trim(),
-                phone: phoneController.text.trim(),
-                email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
-                balance: 0,
-                createdAt: DateTime.now(),
-              );
-              await Provider.of<AccountProvider>(context, listen: false).addSupplier(newSupplier);
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إضافة المورد')));
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _editSupplier(SupplierAccount supplier) {
     final nameController = TextEditingController(text: supplier.name);
     final phoneController = TextEditingController(text: supplier.phone);
@@ -103,6 +63,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                 balance: supplier.balance,
                 createdAt: supplier.createdAt,
                 transactions: supplier.transactions,
+                companyId: supplier.companyId,
               );
               await Provider.of<AccountProvider>(context, listen: false).updateSupplier(updated);
               Navigator.pop(ctx);
@@ -273,11 +234,6 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                   );
                 },
               ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addSupplier,
-        child: const Icon(Icons.add),
-        backgroundColor: Colors.teal,
       ),
     );
   }
