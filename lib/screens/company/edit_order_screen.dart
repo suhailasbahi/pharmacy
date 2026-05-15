@@ -51,43 +51,55 @@ class _EditOrderScreenState extends State<EditOrderScreen> {
     });
   }
 
-  void _changeUnit(int index, String newUnit) {
-    setState(() {
-      final item = _items[index];
-      if (item.unit == newUnit) return;
-      if (item.piecesPerCarton == null || item.piecesPerCarton! <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لا يمكن تغيير الوحدة لهذا المنتج'), backgroundColor: Colors.orange),
-        );
-        return;
-      }
-      int newQuantity;
-      if (item.unit == 'piece' && newUnit == 'carton') {
-        newQuantity = (item.quantity / item.piecesPerCarton!).ceil();
-        if (newQuantity < 1) newQuantity = 1;
-      } else if (item.unit == 'carton' && newUnit == 'piece') {
-        newQuantity = item.quantity * item.piecesPerCarton!;
-      } else {
-        return;
-      }
-      final newItem = OrderItem(
-        productId: item.productId,
-        productName: item.productName,
-        scientificName: item.scientificName,
-        quantity: newQuantity,
-        quantityInPieces: newUnit == 'carton'
-            ? newQuantity * (item.piecesPerCarton ?? 1)
-            : newQuantity,
-        unit: newUnit,
-        piecesPerCarton: item.piecesPerCarton,
-        price: item.price,
-        bonusReceived: item.bonusReceived,
-        totalPrice: item.price * newQuantity,
+    void _changeUnit(int index, String newUnit) {
+  setState(() {
+    final item = _items[index];
+    if (item.unit == newUnit) return;
+    
+    if (item.piecesPerCarton == null || item.piecesPerCarton! <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يمكن تغيير الوحدة لهذا المنتج'), backgroundColor: Colors.orange),
       );
-      _items[index] = newItem;
-      _recalculateTotal();
-    });
-  }
+      return;
+    }
+    
+    int newQuantity;
+    double newPricePerUnit;
+    String newUnitText;
+    
+    if (item.unit == 'piece' && newUnit == 'carton') {
+      // تحويل من باكيت إلى كرتون
+      newQuantity = (item.quantity / item.piecesPerCarton!).ceil();
+      newPricePerUnit = item.price * item.piecesPerCarton!;
+      newUnitText = 'carton';
+    } else if (item.unit == 'carton' && newUnit == 'piece') {
+      // تحويل من كرتون إلى باكيت
+      newQuantity = item.quantity * item.piecesPerCarton!;
+      newPricePerUnit = item.price / item.piecesPerCarton!;
+      newUnitText = 'piece';
+    } else {
+      return;
+    }
+    
+    final newItem = OrderItem(
+      productId: item.productId,
+      productName: item.productName,
+      scientificName: item.scientificName,
+      quantity: newQuantity,
+      quantityInPieces: newUnit == 'carton'
+          ? newQuantity * (item.piecesPerCarton ?? 1)
+          : newQuantity,
+      unit: newUnitText,
+      piecesPerCarton: item.piecesPerCarton,
+      price: newPricePerUnit,
+      bonusReceived: item.bonusReceived,
+      totalPrice: newPricePerUnit * newQuantity,
+    );
+    
+    _items[index] = newItem;
+    _recalculateTotal();
+  });
+}
 
   void _recalculateTotal() {
     _totalPrice = _items.fold(0.0, (sum, item) => sum + item.totalPrice);

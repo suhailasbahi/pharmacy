@@ -14,6 +14,9 @@ import 'company_detailed_reports_screen.dart';
 import 'branches_management_screen.dart';
 import 'roles_management_screen.dart';
 import 'manage_sub_accounts_screen.dart';
+import 'customer_sales_screen.dart';
+import 'top_products_screen.dart';
+import 'sales_trend_screen.dart';
 
 class CompanyHomeScreen extends StatefulWidget {
   const CompanyHomeScreen({Key? key}) : super(key: key);
@@ -133,6 +136,38 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
                   Navigator.push(context, MaterialPageRoute(builder: (_) =>  CompanyDetailedReportsScreen()));
                 },
               ),
+              
+              // بعد تقارير تفصيلية
+const Divider(),
+const Padding(
+  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  child: Text('📊 تقارير متقدمة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+),
+ListTile(
+  leading: const Icon(Icons.people, color: Colors.teal),
+  title: const Text('المبيعات حسب العميل'),
+  onTap: () {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (_) =>  CustomerSalesScreen()));
+  },
+),
+ListTile(
+  leading: const Icon(Icons.trending_up, color: Colors.teal),
+  title: const Text('أكثر المنتجات مبيعاً'),
+  onTap: () {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (_) =>  TopProductsScreen()));
+  },
+),
+ListTile(
+  leading: const Icon(Icons.show_chart, color: Colors.teal),
+  title: const Text('اتجاه المبيعات'),
+  onTap: () {
+    Navigator.pop(context);
+    Navigator.push(context, MaterialPageRoute(builder: (_) =>  SalesTrendScreen()));
+  },
+),
+              
             const Divider(),
             // ========== إدارة العملاء ==========
             if (auth.canViewAllCustomers || auth.canViewOwnCustomers || auth.canAddCustomer || auth.canEditCustomer)

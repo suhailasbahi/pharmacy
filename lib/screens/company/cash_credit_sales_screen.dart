@@ -17,7 +17,6 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   DateTimeRange? _dateRange;
   List<OrderModel> _allOrders = [];
   bool _isLoading = true;
-  List<Region> _regions = [];
 
   @override
   void initState() {
@@ -28,32 +27,22 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final branchId = auth.getEffectiveBranchId();
+    final companyId = auth.currentCompanyId;
+    if (companyId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
+    
     if (_dateRange != null) {
       orders = orders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
-    final Set<String> regionIds = {};
-    final List<Region> allRegions = Region.allRegions;
-    for (var order in orders) {
-      final city = order.pharmacyCity;
-      final matchedRegion = allRegions.firstWhere(
-        (r) => r.name == city,
-        orElse: () => const Region('other', 'أخرى'),
-      );
-      if (matchedRegion.id != 'other') {
-        regionIds.add(matchedRegion.id);
-      }
-    }
-    final regionsList = regionIds.map((id) => allRegions.firstWhere((r) => r.id == id)).toList();
-    regionsList.sort((a, b) => a.name.compareTo(b.name));
+    
     setState(() {
       _allOrders = orders;
-      _regions = regionsList;
       _isLoading = false;
     });
   }
@@ -65,7 +54,7 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   Future<void> _selectDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2024, 1, 1),
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
@@ -94,8 +83,10 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
       orders = orders.where((o) => o.pharmacyCity == regionName).toList();
     }
 
-    double totalCash = 0, totalCredit = 0;
-    Map<String, double> cashByRegion = {}, creditByRegion = {};
+    double totalCash = 0;
+    double totalCredit = 0;
+    Map<String, double> cashByRegion = {};
+    Map<String, double> creditByRegion = {};
 
     for (var order in orders) {
       final region = order.pharmacyCity;
@@ -109,18 +100,13 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
       }
     }
 
-    double total = totalCash + totalCredit;
-    double cashPercent = total == 0 ? 0 : (totalCash / total) * 100;
-    double creditPercent = total == 0 ? 0 : (totalCredit / total) * 100;
+    final total = totalCash + totalCredit;
+    final cashPercent = total > 0 ? (totalCash / total) * 100 : 0;
+    final creditPercent = total > 0 ? (totalCredit / total) * 100 : 0;
 
-    // جمع المناطق من البيانات الفعلية
-    final Set<String> allRegionNames = {
-      ...cashByRegion.keys,
-      ...creditByRegion.keys,
-    };
-    List<String> displayRegions = _selectedRegionId == 'all'
-        ? allRegionNames.toList()
-        : [_selectedRegionId == 'all' ? 'all' : Region.getNameById(_selectedRegionId)];
+    final Set<String> allRegions = {...cashByRegion.keys, ...creditByRegion.keys};
+    final regionList = allRegions.toList();
+    regionList.sort();
 
     return Scaffold(
       appBar: AppBar(
@@ -159,61 +145,60 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
               ),
             Padding(
               padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  _buildSummaryCard('إجمالي المبيعات', total, Icons.attach_money, Colors.teal, ''),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard('نقدي', totalCash, Icons.money, Colors.green, '${cashPercent.toStringAsFixed(1)}%'),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard('آجل', totalCredit, Icons.credit_card, Colors.orange, '${creditPercent.toStringAsFixed(1)}%'),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: DropdownButtonFormField<String>(
                 value: _selectedRegionId,
                 decoration: const InputDecoration(labelText: 'تصفية حسب المحافظة'),
                 items: [
                   const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
-                  ..._regions.map((region) => DropdownMenuItem(
-                        value: region.id,
-                        child: Text(region.name),
+                  ...regionList.map((region) => DropdownMenuItem(
+                        value: region,
+                        child: Text(region),
                       )),
                 ],
                 onChanged: (val) => setState(() => _selectedRegionId = val!),
               ),
             ),
-            Card(
-              margin: const EdgeInsets.all(12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Text('الإجمالي الكلي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildSummaryCard('نقدي', totalCash, cashPercent, Colors.green),
-                        _buildSummaryCard('آجل', totalCredit, creditPercent, Colors.orange),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
             Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columns: const [
-                    DataColumn(label: Text('المحافظة')),
-                    DataColumn(label: Text('نقدي')),
-                    DataColumn(label: Text('آجل')),
-                    DataColumn(label: Text('الإجمالي')),
-                  ],
-                  rows: displayRegions.map((region) {
-                    final cash = cashByRegion[region] ?? 0;
-                    final credit = creditByRegion[region] ?? 0;
-                    final totalRegion = cash + credit;
-                    return DataRow(cells: [
-                      DataCell(Text(region)),
-                      DataCell(Text('${cash.toStringAsFixed(2)}')),
-                      DataCell(Text('${credit.toStringAsFixed(2)}')),
-                      DataCell(Text('${totalRegion.toStringAsFixed(2)}')),
-                    ]);
-                  }).toList(),
-                ),
-              ),
+              child: regionList.isEmpty
+                  ? const Center(child: Text('لا توجد بيانات'))
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columnSpacing: 20,
+                        columns: const [
+                          DataColumn(label: Text('المحافظة')),
+                          DataColumn(label: Text('نقدي'), numeric: true),
+                          DataColumn(label: Text('آجل'), numeric: true),
+                          DataColumn(label: Text('الإجمالي'), numeric: true),
+                          DataColumn(label: Text('% نقدي'), numeric: true),
+                        ],
+                        rows: regionList.map((region) {
+                          final cash = cashByRegion[region] ?? 0;
+                          final credit = creditByRegion[region] ?? 0;
+                          final regionTotal = cash + credit;
+                          final regionCashPercent = regionTotal > 0 ? (cash / regionTotal) * 100 : 0;
+                          return DataRow(cells: [
+                            DataCell(Text(region)),
+                            DataCell(Text('${cash.toStringAsFixed(2)}')),
+                            DataCell(Text('${credit.toStringAsFixed(2)}')),
+                            DataCell(Text('${regionTotal.toStringAsFixed(2)}')),
+                            DataCell(Text('${regionCashPercent.toStringAsFixed(1)}%')),
+                          ]);
+                        }).toList(),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -221,20 +206,23 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String title, double amount, double percent, Color color) {
-    return Container(
-      width: 120,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
+  Widget _buildSummaryCard(String title, double value, IconData icon, Color color, String percentage) {
+    return Expanded(
+      child: Card(
         color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-          Text('${amount.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-          Text('${percent.toStringAsFixed(1)}%', style: TextStyle(color: color)),
-        ],
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(height: 4),
+              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+              Text('${value.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+              if (percentage.isNotEmpty)
+                Text(percentage, style: TextStyle(color: color, fontSize: 12)),
+            ],
+          ),
+        ),
       ),
     );
   }

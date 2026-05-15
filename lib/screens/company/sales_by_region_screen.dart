@@ -28,30 +28,39 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final branchId = auth.getEffectiveBranchId();
+    final companyId = auth.currentCompanyId;
+    if (companyId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
+    
     if (_dateRange != null) {
       orders = orders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
-    final Set<String> regionIds = {};
-    final List<Region> allRegions = Region.allRegions;
+    
+    // استخراج المناطق من الطلبات الفعلية
+    final Set<String> regionNames = {};
     for (var order in orders) {
-      final city = order.pharmacyCity;
-      // محاولة مطابقة اسم المدينة مع معرف المنطقة
-      final matchedRegion = allRegions.firstWhere(
-        (r) => r.name == city,
-        orElse: () => const Region('other', 'أخرى'),
-      );
-      if (matchedRegion.id != 'other') {
-        regionIds.add(matchedRegion.id);
+      if (order.pharmacyCity.isNotEmpty) {
+        regionNames.add(order.pharmacyCity);
       }
     }
-    final regionsList = regionIds.map((id) => allRegions.firstWhere((r) => r.id == id)).toList();
+    
+    final List<Region> allRegions = Region.allRegions;
+    final List<Region> regionsList = [];
+    for (var name in regionNames) {
+      final matched = allRegions.firstWhere(
+        (r) => r.name == name,
+        orElse: () => Region('other', name),
+      );
+      regionsList.add(matched);
+    }
     regionsList.sort((a, b) => a.name.compareTo(b.name));
+    
     setState(() {
       _allOrders = orders;
       _regions = regionsList;
@@ -66,7 +75,7 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
   Future<void> _selectDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2024, 1, 1),
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
@@ -95,23 +104,29 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
       orders = orders.where((o) => o.pharmacyCity == regionName).toList();
     }
 
-    Map<String, double> salesByRegion = {};
-    Map<String, Map<String, double>> cashCreditByRegion = {};
+    // تجميع البيانات
+    Map<String, double> salesByCity = {};
+    Map<String, double> cashByCity = {};
+    Map<String, double> creditByCity = {};
 
     for (var order in orders) {
       final city = order.pharmacyCity;
       final amount = order.totalPrice;
-      salesByRegion[city] = (salesByRegion[city] ?? 0) + amount;
-      cashCreditByRegion.putIfAbsent(city, () => {'cash': 0.0, 'credit': 0.0});
+      salesByCity[city] = (salesByCity[city] ?? 0) + amount;
       if (order.paymentType == 'cash') {
-        cashCreditByRegion[city]!['cash'] = (cashCreditByRegion[city]!['cash'] ?? 0) + amount;
+        cashByCity[city] = (cashByCity[city] ?? 0) + amount;
       } else {
-        cashCreditByRegion[city]!['credit'] = (cashCreditByRegion[city]!['credit'] ?? 0) + amount;
+        creditByCity[city] = (creditByCity[city] ?? 0) + amount;
       }
     }
 
-    final entries = salesByRegion.entries.toList();
+    final entries = salesByCity.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
+
+    // حساب الإجماليات
+    final totalSales = orders.fold(0.0, (s, o) => s + o.totalPrice);
+    final totalCash = cashByCity.values.fold(0.0, (s, v) => s + v);
+    final totalCredit = creditByCity.values.fold(0.0, (s, v) => s + v);
 
     return Scaffold(
       appBar: AppBar(
@@ -119,13 +134,31 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: _selectDateRange,
+            tooltip: 'تحديد فترة',
+          ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: Column(
           children: [
+            // بطاقات الإجماليات
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  _buildSummaryCard('إجمالي المبيعات', totalSales, Colors.teal),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard('نقدي', totalCash, Colors.green),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard('آجل', totalCredit, Colors.orange),
+                ],
+              ),
+            ),
+            // فلتر التاريخ
             if (_dateRange != null)
               Container(
                 padding: const EdgeInsets.all(8),
@@ -144,6 +177,7 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
                   ],
                 ),
               ),
+            // فلتر المحافظة
             Padding(
               padding: const EdgeInsets.all(12),
               child: DropdownButtonFormField<String>(
@@ -159,34 +193,57 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
                 onChanged: (val) => setState(() => _selectedRegionId = val!),
               ),
             ),
+            // جدول البيانات
             Expanded(
               child: entries.isEmpty
-                  ? const Center(child: Text('لا توجد مبيعات'))
+                  ? const Center(child: Text('لا توجد مبيعات في هذه الفترة'))
                   : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
+                        columnSpacing: 20,
                         columns: const [
-                          DataColumn(label: Text('المحافظة')),
+                          DataColumn(label: Text('المحافظة', style: TextStyle(fontWeight: FontWeight.bold))),
                           DataColumn(label: Text('إجمالي المبيعات')),
                           DataColumn(label: Text('نقدي')),
                           DataColumn(label: Text('آجل')),
+                          DataColumn(label: Text('النسبة المئوية')),
                         ],
                         rows: entries.map((entry) {
                           final city = entry.key;
                           final total = entry.value;
-                          final cash = cashCreditByRegion[city]?['cash'] ?? 0;
-                          final credit = cashCreditByRegion[city]?['credit'] ?? 0;
+                          final cash = cashByCity[city] ?? 0;
+                          final credit = creditByCity[city] ?? 0;
+                          final percentage = totalSales > 0 ? (total / totalSales) * 100 : 0;
                           return DataRow(cells: [
                             DataCell(Text(city)),
                             DataCell(Text('${total.toStringAsFixed(2)}')),
                             DataCell(Text('${cash.toStringAsFixed(2)}')),
                             DataCell(Text('${credit.toStringAsFixed(2)}')),
+                            DataCell(Text('${percentage.toStringAsFixed(1)}%')),
                           ]);
                         }).toList(),
                       ),
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard(String title, double value, Color color) {
+    return Expanded(
+      child: Card(
+        color: color.withOpacity(0.1),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text('${value.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
         ),
       ),
     );

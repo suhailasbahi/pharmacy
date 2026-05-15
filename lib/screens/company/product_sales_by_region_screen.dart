@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/order_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
-import '../../models/dummy_products.dart';
+import '../../models/product_model.dart';
+import '../../models/region.dart';
 
 class ProductSalesByRegionScreen extends StatefulWidget {
   const ProductSalesByRegionScreen({Key? key}) : super(key: key);
@@ -16,7 +18,7 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
   String? _selectedProductId;
   Map<String, String> _productIdToName = {};
   DateTimeRange? _dateRange;
-  List<OrderModel> _orders = [];
+  List<OrderModel> _allOrders = [];
   bool _isLoading = true;
 
   @override
@@ -26,30 +28,42 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
     _loadData();
   }
 
-  void _loadProducts() {
-    for (var agency in dummyAgencies) {
-      for (var product in agency.products) {
-        if (!_productIdToName.containsKey(product.id)) {
-          _productIdToName[product.id] = product.name;
-        }
-      }
+  Future<void> _loadProducts() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId;
+    if (companyId == null) return;
+    
+    final snapshot = await FirebaseFirestore.instance
+        .collection('products')
+        .where('companyId', isEqualTo: companyId)
+        .get();
+    
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      _productIdToName[doc.id] = data['name'] ?? 'منتج بدون اسم';
     }
+    setState(() {});
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final branchId = auth.getEffectiveBranchId();
+    final companyId = auth.currentCompanyId;
+    if (companyId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    var orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
+    
     if (_dateRange != null) {
       orders = orders.where((o) =>
           o.date.isAfter(_dateRange!.start) &&
           o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
     }
+    
     setState(() {
-      _orders = orders;
+      _allOrders = orders;
       _isLoading = false;
     });
   }
@@ -61,7 +75,7 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
   Future<void> _selectDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(2024, 1, 1),
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
@@ -74,32 +88,33 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return  Scaffold(
-        appBar: AppBar(title: Text('مبيعات صنف حسب المحافظة'), centerTitle: true, backgroundColor: Colors.teal),
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('مبيعات صنف حسب المحافظة'),
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    Map<String, Map<String, double>> salesByProductRegion = {};
-    for (var order in _orders) {
-      final region = order.pharmacyCity;
-      for (var item in order.items) {
-        final productName = item.productName;
-        salesByProductRegion.putIfAbsent(productName, () => {});
-        salesByProductRegion[productName]![region] = (salesByProductRegion[productName]![region] ?? 0) + item.totalPrice;
+    // تجميع البيانات للمنتج المختار
+    Map<String, double> salesByRegion = {};
+    
+    if (_selectedProductId != null) {
+      for (var order in _allOrders) {
+        for (var item in order.items) {
+          if (item.productId == _selectedProductId) {
+            final region = order.pharmacyCity;
+            salesByRegion[region] = (salesByRegion[region] ?? 0) + item.totalPrice;
+          }
+        }
       }
     }
 
-    String selectedProductName = '';
-    if (_selectedProductId != null && _productIdToName.containsKey(_selectedProductId)) {
-      selectedProductName = _productIdToName[_selectedProductId]!;
-    }
-    Map<String, double> regionSales = {};
-    if (selectedProductName.isNotEmpty && salesByProductRegion.containsKey(selectedProductName)) {
-      regionSales = salesByProductRegion[selectedProductName]!;
-    }
-    final entries = regionSales.entries.toList();
+    final entries = salesByRegion.entries.toList();
     entries.sort((a, b) => b.value.compareTo(a.value));
+    final total = entries.fold(0.0, (s, e) => s + e.value);
 
     return Scaffold(
       appBar: AppBar(
@@ -107,7 +122,11 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange, tooltip: 'تحديد فترة'),
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: _selectDateRange,
+            tooltip: 'تحديد فترة',
+          ),
         ],
       ),
       body: RefreshIndicator(
@@ -137,31 +156,43 @@ class _ProductSalesByRegionScreenState extends State<ProductSalesByRegionScreen>
               child: DropdownButtonFormField<String>(
                 hint: const Text('اختر المنتج'),
                 value: _selectedProductId,
-                items: _productIdToName.entries.map((entry) {
-                  return DropdownMenuItem(value: entry.key, child: Text(entry.value));
-                }).toList(),
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('-- اختر منتجاً --')),
+                  ..._productIdToName.entries.map((entry) {
+                    return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                  }),
+                ],
                 onChanged: (val) => setState(() => _selectedProductId = val),
               ),
             ),
-            if (selectedProductName.isNotEmpty)
+            if (_selectedProductId != null && entries.isEmpty)
+              const Expanded(
+                child: Center(child: Text('لا توجد مبيعات لهذا المنتج في الفترة المحددة')),
+              ),
+            if (_selectedProductId != null && entries.isNotEmpty)
               Expanded(
-                child: entries.isEmpty
-                    ? const Center(child: Text('لا توجد مبيعات لهذا المنتج'))
-                    : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('المحافظة')),
-                            DataColumn(label: Text('إجمالي المبيعات')),
-                          ],
-                          rows: entries.map((entry) {
-                            return DataRow(cells: [
-                              DataCell(Text(entry.key)),
-                              DataCell(Text('${entry.value.toStringAsFixed(2)}')),
-                            ]);
-                          }).toList(),
-                        ),
-                      ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columnSpacing: 20,
+                    columns: const [
+                      DataColumn(label: Text('المحافظة', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('إجمالي المبيعات')),
+                      DataColumn(label: Text('النسبة المئوية')),
+                    ],
+                    rows: entries.map((entry) {
+                      final region = entry.key;
+                      final amount = entry.value;
+                      final percentage = total > 0 ? (amount / total) * 100 : 0;
+                      return DataRow(cells: [
+                        DataCell(Text(region)),
+                        DataCell(Text('${amount.toStringAsFixed(2)}')),
+                        DataCell(Text('${percentage.toStringAsFixed(1)}%')),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
               ),
           ],
         ),
