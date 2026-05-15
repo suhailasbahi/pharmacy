@@ -19,6 +19,8 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
   DateTimeRange? _dateRange;
   List<OrderModel> _allOrders = [];
   bool _isLoading = true;
+  String _searchQuery = '';
+  List<String> _filteredProductIds = [];
 
   @override
   void initState() {
@@ -28,11 +30,20 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
   }
 
   Future<void> _loadProducts() async {
-    final snapshot = await FirebaseFirestore.instance.collection('products').get();
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId;
+    if (companyId == null) return;
+    
+    final snapshot = await FirebaseFirestore.instance
+        .collection('products')
+        .where('companyId', isEqualTo: companyId)
+        .get();
+    
     for (var doc in snapshot.docs) {
       final data = doc.data();
       _productIdToName[doc.id] = data['name'] ?? 'منتج بدون اسم';
     }
+    _filteredProductIds = _productIdToName.keys.toList();
     setState(() {});
   }
 
@@ -57,6 +68,20 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
     setState(() {
       _allOrders = orders;
       _isLoading = false;
+    });
+  }
+
+  void _filterProducts(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredProductIds = _productIdToName.keys.toList();
+      } else {
+        _filteredProductIds = _productIdToName.entries
+            .where((entry) => entry.value.toLowerCase().contains(query.toLowerCase()))
+            .map((entry) => entry.key)
+            .toList();
+      }
     });
   }
 
@@ -146,14 +171,34 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
               ),
             Padding(
               padding: const EdgeInsets.all(12),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'ابحث عن منتج...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => _filterProducts(''),
+                        )
+                      : null,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: _filterProducts,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: DropdownButtonFormField<String>(
                 hint: const Text('اختر المنتج'),
                 value: _selectedProductId,
                 isExpanded: true,
                 items: [
                   const DropdownMenuItem(value: null, child: Text('-- اختر منتجاً --')),
-                  ..._productIdToName.entries.map((entry) {
-                    return DropdownMenuItem(value: entry.key, child: Text(entry.value));
+                  ..._filteredProductIds.map((productId) {
+                    return DropdownMenuItem(
+                      value: productId,
+                      child: Text(_productIdToName[productId] ?? productId),
+                    );
                   }),
                 ],
                 onChanged: (val) => setState(() => _selectedProductId = val),
@@ -170,9 +215,9 @@ class _ProductPurchasesScreenState extends State<ProductPurchasesScreen> {
                   child: DataTable(
                     columnSpacing: 20,
                     columns: const [
-                      DataColumn(label: Text('المورد', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('إجمالي المشتريات')),
-                      DataColumn(label: Text('النسبة')),
+                      DataColumn(label: Text('المورد')),
+                      DataColumn(label: Text('إجمالي المشتريات'), numeric: true),
+                      DataColumn(label: Text('النسبة'), numeric: true),
                     ],
                     rows: entries.map((entry) {
                       final supplier = entry.key;

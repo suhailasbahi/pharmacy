@@ -4,7 +4,6 @@ import '../../providers/order_provider.dart';
 import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
-import 'edit_order_screen.dart';
 
 class CompanyOrdersScreen extends StatefulWidget {
   @override
@@ -22,21 +21,17 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
   }
 
   Future<void> _loadOrders() async {
-  setState(() => _isLoading = true);
-  final auth = Provider.of<AuthService>(context, listen: false);
-  final companyId = auth.currentCompanyId;
-  if (companyId == null) {
-    setState(() => _isLoading = false);
-    return;
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
+    final branchId = auth.getEffectiveBranchId();
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+    setState(() {
+      _orders = orders;
+      _isLoading = false;
+    });
   }
-  final branchId = auth.getEffectiveBranchId();
-  final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-  final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
-  setState(() {
-    _orders = orders;
-    _isLoading = false;
-  });
-}
 
   Future<void> _refresh() async {
     await _loadOrders();
@@ -82,6 +77,7 @@ class CompanyOrderCard extends StatefulWidget {
 
 class _CompanyOrderCardState extends State<CompanyOrderCard> {
   bool _isExpanded = false;
+  bool _isProcessing = false;  // إضافة منع الضغط المتكرر
   final TextEditingController _rejectReasonController = TextEditingController();
 
   String _getStatusText(String status) {
@@ -107,40 +103,80 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
   }
 
   Future<void> _acceptOrder() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    await orderProvider.acceptOrder(widget.order.id, accountProvider);
-    widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
-    );
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+    try {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+      await orderProvider.acceptOrder(widget.order.id, accountProvider);
+      widget.onStatusChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   Future<void> _rejectOrder() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    await orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
-    widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
-    );
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+    try {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      await orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
+      widget.onStatusChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   Future<void> _updateShipping() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    await orderProvider.updateOrderStatus(widget.order.id, 'shipped');
-    widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
-    );
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+    try {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      await orderProvider.updateOrderStatus(widget.order.id, 'shipped');
+      widget.onStatusChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   Future<void> _updateDelivered() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    await orderProvider.updateOrderStatus(widget.order.id, 'delivered');
-    widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
-    );
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+    try {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      await orderProvider.updateOrderStatus(widget.order.id, 'delivered');
+      widget.onStatusChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   void _showRejectDialog() {
@@ -226,13 +262,10 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
-                      Text(_isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
+                    Text(_isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ]),
                 ],
               ),
             ),
@@ -267,20 +300,6 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                   if (order.status == 'pending')
                     Row(
                       children: [
-                        if (auth.canAcceptOrder || auth.canRejectOrder)
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => EditOrderScreen(order: order)),
-                                );
-                                if (result == true) widget.onStatusChanged();
-                              },
-                              child: const Text('تعديل الطلب'),
-                            ),
-                          ),
-                        if (auth.canRejectOrder) const SizedBox(width: 8),
                         if (auth.canRejectOrder)
                           Expanded(
                             child: OutlinedButton(
@@ -289,7 +308,7 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                               child: const Text('رفض', style: TextStyle(color: Colors.red)),
                             ),
                           ),
-                        if (auth.canAcceptOrder) const SizedBox(width: 8),
+                        if (auth.canRejectOrder && auth.canAcceptOrder) const SizedBox(width: 8),
                         if (auth.canAcceptOrder)
                           Expanded(
                             child: ElevatedButton(

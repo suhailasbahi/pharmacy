@@ -98,10 +98,15 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
       );
     }
 
-    List<OrderModel> orders = _allOrders;
+    List<OrderModel> filteredOrders = List.from(_allOrders);
+    
     if (_selectedRegionId != 'all') {
-      final regionName = Region.getNameById(_selectedRegionId);
-      orders = orders.where((o) => o.pharmacyCity == regionName).toList();
+      try {
+        final regionName = Region.getNameById(_selectedRegionId);
+        filteredOrders = filteredOrders.where((o) => o.pharmacyCity == regionName).toList();
+      } catch (e) {
+        print('Error filtering by region: $e');
+      }
     }
 
     // تجميع البيانات
@@ -109,7 +114,7 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
     Map<String, double> cashByCity = {};
     Map<String, double> creditByCity = {};
 
-    for (var order in orders) {
+    for (var order in filteredOrders) {
       final city = order.pharmacyCity;
       final amount = order.totalPrice;
       salesByCity[city] = (salesByCity[city] ?? 0) + amount;
@@ -124,9 +129,20 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
     entries.sort((a, b) => b.value.compareTo(a.value));
 
     // حساب الإجماليات
-    final totalSales = orders.fold(0.0, (s, o) => s + o.totalPrice);
+    final totalSales = filteredOrders.fold(0.0, (s, o) => s + o.totalPrice);
     final totalCash = cashByCity.values.fold(0.0, (s, v) => s + v);
     final totalCredit = creditByCity.values.fold(0.0, (s, v) => s + v);
+
+    if (filteredOrders.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('المبيعات حسب المحافظة'),
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: Text('لا توجد مبيعات في هذه الفترة')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -145,20 +161,6 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
         onRefresh: _refresh,
         child: Column(
           children: [
-            // بطاقات الإجماليات
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  _buildSummaryCard('إجمالي المبيعات', totalSales, Colors.teal),
-                  const SizedBox(width: 12),
-                  _buildSummaryCard('نقدي', totalCash, Colors.green),
-                  const SizedBox(width: 12),
-                  _buildSummaryCard('آجل', totalCredit, Colors.orange),
-                ],
-              ),
-            ),
-            // فلتر التاريخ
             if (_dateRange != null)
               Container(
                 padding: const EdgeInsets.all(8),
@@ -177,7 +179,18 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
                   ],
                 ),
               ),
-            // فلتر المحافظة
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  _buildSummaryCard('إجمالي المبيعات', totalSales, Colors.teal),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard('نقدي', totalCash, Colors.green),
+                  const SizedBox(width: 12),
+                  _buildSummaryCard('آجل', totalCredit, Colors.orange),
+                ],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(12),
               child: DropdownButtonFormField<String>(
@@ -190,23 +203,27 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
                         child: Text(region.name),
                       )),
                 ],
-                onChanged: (val) => setState(() => _selectedRegionId = val!),
+                onChanged: (val) async {
+                  setState(() {
+                    _selectedRegionId = val!;
+                  });
+                  await _loadData();
+                },
               ),
             ),
-            // جدول البيانات
             Expanded(
               child: entries.isEmpty
-                  ? const Center(child: Text('لا توجد مبيعات في هذه الفترة'))
+                  ? const Center(child: Text('لا توجد مبيعات'))
                   : SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         columnSpacing: 20,
                         columns: const [
-                          DataColumn(label: Text('المحافظة', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('إجمالي المبيعات')),
-                          DataColumn(label: Text('نقدي')),
-                          DataColumn(label: Text('آجل')),
-                          DataColumn(label: Text('النسبة المئوية')),
+                          DataColumn(label: Text('المحافظة')),
+                          DataColumn(label: Text('إجمالي المبيعات'), numeric: true),
+                          DataColumn(label: Text('نقدي'), numeric: true),
+                          DataColumn(label: Text('آجل'), numeric: true),
+                          DataColumn(label: Text('النسبة المئوية'), numeric: true),
                         ],
                         rows: entries.map((entry) {
                           final city = entry.key;

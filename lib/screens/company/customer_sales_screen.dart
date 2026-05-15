@@ -18,6 +18,8 @@ class _CustomerSalesScreenState extends State<CustomerSalesScreen> {
   List<OrderModel> _allOrders = [];
   List<CustomerAccount> _customers = [];
   bool _isLoading = true;
+  String _searchQuery = '';
+  List<CustomerAccount> _filteredCustomers = [];
 
   @override
   void initState() {
@@ -26,32 +28,46 @@ class _CustomerSalesScreenState extends State<CustomerSalesScreen> {
   }
 
   Future<void> _loadData() async {
-  setState(() => _isLoading = true);
-  final auth = Provider.of<AuthService>(context, listen: false);
-  final companyId = auth.currentCompanyId;
-  if (companyId == null) {
-    setState(() => _isLoading = false);
-    return;
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId;
+    if (companyId == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
+    
+    if (_dateRange != null) {
+      orders = orders.where((o) =>
+          o.date.isAfter(_dateRange!.start) &&
+          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+    }
+
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    await accountProvider.loadCustomersForCompany(companyId);
+    
+    setState(() {
+      _allOrders = orders;
+      _customers = accountProvider.customers;
+      _filteredCustomers = _customers;
+      _isLoading = false;
+    });
   }
 
-  final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-  List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
-  
-  if (_dateRange != null) {
-    orders = orders.where((o) =>
-        o.date.isAfter(_dateRange!.start) &&
-        o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
+  void _filterCustomers(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredCustomers = _customers;
+      } else {
+        _filteredCustomers = _customers
+            .where((c) => c.pharmacyName.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
+    });
   }
-
-  final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-  await accountProvider.loadCustomersForCompany(companyId);
-  
-  setState(() {
-    _allOrders = orders;
-    _customers = accountProvider.customers;
-    _isLoading = false;
-  });
-}
 
   Future<void> _refresh() async {
     await _loadData();
@@ -70,12 +86,12 @@ class _CustomerSalesScreenState extends State<CustomerSalesScreen> {
     }
   }
 
- @override
-Widget build(BuildContext context) {
-  final auth = Provider.of<AuthService>(context);
-  final companyId = auth.currentCompanyId ?? '';
-  
-  if (_isLoading) {
+  @override
+  Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
+    final companyId = auth.currentCompanyId ?? '';
+    
+    if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('المبيعات حسب العميل'),
@@ -91,31 +107,17 @@ Widget build(BuildContext context) {
 
     for (var order in _allOrders) {
       final customerId = order.pharmacyId;
-      final customerName = order.pharmacyName;
       final amount = order.totalPrice;
       final paymentType = order.paymentType;
 
       if (!customerSales.containsKey(customerId)) {
-        customerSales[customerId] = {
-          'name': 0.0,
-          'total': 0.0,
-          'cash': 0.0,
-          'credit': 0.0,
-        };
-        customerSales[customerId]!['name'] = 0.0; // مؤقتاً
+        customerSales[customerId] = {'total': 0.0, 'cash': 0.0, 'credit': 0.0};
       }
       customerSales[customerId]!['total'] = (customerSales[customerId]!['total'] ?? 0) + amount;
       if (paymentType == 'cash') {
         customerSales[customerId]!['cash'] = (customerSales[customerId]!['cash'] ?? 0) + amount;
       } else {
         customerSales[customerId]!['credit'] = (customerSales[customerId]!['credit'] ?? 0) + amount;
-      }
-    }
-
-    // ربط أسماء العملاء
-    for (var customer in _customers) {
-      if (customerSales.containsKey(customer.pharmacyId)) {
-        customerSales[customer.pharmacyId]!['name'] = double.parse(customer.pharmacyName); // hack مؤقت
       }
     }
 
@@ -129,11 +131,7 @@ Widget build(BuildContext context) {
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.date_range),
-            onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
-          ),
+          IconButton(icon: const Icon(Icons.date_range), onPressed: _selectDateRange),
         ],
       ),
       body: RefreshIndicator(
@@ -160,11 +158,28 @@ Widget build(BuildContext context) {
               ),
             Padding(
               padding: const EdgeInsets.all(12),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: 'ابحث عن عميل...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => _filterCustomers(''),
+                        )
+                      : null,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onChanged: _filterCustomers,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
                   _buildSummaryCard('إجمالي المبيعات', totalSales, Icons.attach_money, Colors.teal),
                   const SizedBox(width: 12),
-                  _buildSummaryCard('عدد العملاء', _customers.length.toDouble(), Icons.people, Colors.blue),
+                  _buildSummaryCard('عدد العملاء', _filteredCustomers.length.toDouble(), Icons.people, Colors.blue),
                 ],
               ),
             ),
@@ -176,11 +191,11 @@ Widget build(BuildContext context) {
                       child: DataTable(
                         columnSpacing: 20,
                         columns: const [
-                          DataColumn(label: Text('اسم العميل', style: TextStyle(fontWeight: FontWeight.bold))),
-                          DataColumn(label: Text('إجمالي المشتريات')),
-                          DataColumn(label: Text('نقدي')),
-                          DataColumn(label: Text('آجل')),
-                          DataColumn(label: Text('النسبة')),
+                          DataColumn(label: Text('اسم العميل')),
+                          DataColumn(label: Text('إجمالي المشتريات'), numeric: true),
+                          DataColumn(label: Text('نقدي'), numeric: true),
+                          DataColumn(label: Text('آجل'), numeric: true),
+                          DataColumn(label: Text('النسبة'), numeric: true),
                         ],
                         rows: entries.map((entry) {
                           final data = entry.value;
@@ -189,22 +204,19 @@ Widget build(BuildContext context) {
                           final credit = data['credit'] ?? 0;
                           final percentage = totalSales > 0 ? (total / totalSales) * 100 : 0;
                           
-                          // البحث عن اسم العميل الحقيقي
                           String customerName = entry.key;
-                           final customer = _customers.firstWhere(
-  (c) => c.pharmacyId == entry.key,
-  orElse: () => CustomerAccount(
-    id: '',
-    pharmacyId: entry.key,
-    pharmacyName: entry.key,
-    phone: '',
-    balance: 0,
-    createdAt: DateTime.now(),
-    companyId: companyId ?? '', // أضف هذا السطر
-  ),
-);
-                            
-                          
+                          final customer = _customers.firstWhere(
+                            (c) => c.pharmacyId == entry.key,
+                            orElse: () => CustomerAccount(
+                              id: '',
+                              pharmacyId: entry.key,
+                              pharmacyName: entry.key,
+                              phone: '',
+                              balance: 0,
+                              createdAt: DateTime.now(),
+                              companyId: companyId,
+                            ),
+                          );
                           if (customer.pharmacyName.isNotEmpty) {
                             customerName = customer.pharmacyName;
                           }

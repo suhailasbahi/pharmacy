@@ -117,7 +117,7 @@ class AgencyCard extends StatelessWidget {
     final cartProvider = Provider.of<CartProvider>(context);
     final productProvider = Provider.of<ProductProvider>(context);
     
-    // تصفية المنتجات من الذاكرة المحلية (بدون طلب جديد إلى Firestore)
+    // تصفية المنتجات من الذاكرة المحلية (بدون طلب جديد)
     final agencyProducts = productProvider.products
         .where((p) => p.agencyId == agency.id)
         .toList();
