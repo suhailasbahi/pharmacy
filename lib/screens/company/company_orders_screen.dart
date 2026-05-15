@@ -22,17 +22,21 @@ class _CompanyOrdersScreenState extends State<CompanyOrdersScreen> {
   }
 
   Future<void> _loadOrders() async {
-    setState(() => _isLoading = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final branchId = auth.getEffectiveBranchId();
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
-    setState(() {
-      _orders = orders;
-      _isLoading = false;
-    });
+  setState(() => _isLoading = true);
+  final auth = Provider.of<AuthService>(context, listen: false);
+  final companyId = auth.currentCompanyId;
+  if (companyId == null) {
+    setState(() => _isLoading = false);
+    return;
   }
+  final branchId = auth.getEffectiveBranchId();
+  final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+  final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+  setState(() {
+    _orders = orders;
+    _isLoading = false;
+  });
+}
 
   Future<void> _refresh() async {
     await _loadOrders();

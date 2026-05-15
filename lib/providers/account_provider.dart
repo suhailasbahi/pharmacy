@@ -1,78 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/account_model.dart' as ledger;
+import '../models/account_model.dart';
 
 class AccountProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   
-  List<ledger.SupplierAccount> _suppliers = [];
-  List<ledger.CustomerAccount> _customers = [];
+  List<CustomerAccount> _customers = [];
+  List<SupplierAccount> _suppliers = [];
 
-  List<ledger.SupplierAccount> get suppliers => _suppliers;
-  List<ledger.CustomerAccount> get customers => _customers;
+  List<CustomerAccount> get customers => _customers;
+  List<SupplierAccount> get suppliers => _suppliers;
 
-  // ===== دوال عامة (تجلب كل البيانات – للصيدليات أو للإدارة) =====
-  Future<void> loadCustomers() async {
-    final snapshot = await _firestore.collection('customers').get();
-    _customers = snapshot.docs.map((doc) => ledger.CustomerAccount.fromMap(doc.id, doc.data())).toList();
-    notifyListeners();
-  }
-
-  Future<void> loadSuppliers() async {
-    final snapshot = await _firestore.collection('suppliers').get();
-    _suppliers = snapshot.docs.map((doc) => ledger.SupplierAccount.fromMap(doc.id, doc.data())).toList();
-    notifyListeners();
-  }
-
-  // ===== دوال خاصة بالشركة (تجلب فقط العملاء/الموردين التابعين لشركة معينة) =====
+  // ========== دوال العملاء (من وجهة نظر الشركة) ==========
+  
   Future<void> loadCustomersForCompany(String companyId) async {
+    if (companyId.isEmpty) return;
     final snapshot = await _firestore
-        .collection('customers')
+        .collection('customer_accounts')
         .where('companyId', isEqualTo: companyId)
         .get();
     _customers = snapshot.docs
-        .map((doc) => ledger.CustomerAccount.fromMap(doc.id, doc.data()))
+        .map((doc) => CustomerAccount.fromMap(doc.id, doc.data()))
         .toList();
     notifyListeners();
   }
 
-  Future<void> loadSuppliersForCompany(String companyId) async {
-    final snapshot = await _firestore
-        .collection('suppliers')
-        .where('companyId', isEqualTo: companyId)
-        .get();
-    _suppliers = snapshot.docs
-        .map((doc) => ledger.SupplierAccount.fromMap(doc.id, doc.data()))
-        .toList();
-    notifyListeners();
-  }
-
-  // ===== باقي الدوال (إضافة، تعديل، حذف، معاملات) – كما هي دون تغيير =====
-  Future<void> addCustomer(ledger.CustomerAccount customer) async {
-    await _firestore.collection('customers').doc(customer.id).set(customer.toMap());
+  Future<void> addCustomer(CustomerAccount customer) async {
+    await _firestore.collection('customer_accounts').doc(customer.id).set(customer.toMap());
     _customers.add(customer);
     notifyListeners();
   }
 
-  Future<void> updateCustomer(ledger.CustomerAccount customer) async {
-    await _firestore.collection('customers').doc(customer.id).update(customer.toMap());
+  Future<void> updateCustomer(CustomerAccount customer) async {
+    await _firestore.collection('customer_accounts').doc(customer.id).update(customer.toMap());
     final index = _customers.indexWhere((c) => c.id == customer.id);
     if (index != -1) _customers[index] = customer;
     notifyListeners();
   }
 
   Future<void> deleteCustomer(String id) async {
-    await _firestore.collection('customers').doc(id).delete();
+    await _firestore.collection('customer_accounts').doc(id).delete();
     _customers.removeWhere((c) => c.id == id);
     notifyListeners();
   }
 
-  Future<void> addCustomerTransaction(String customerId, ledger.LedgerTransaction transaction) async {
-    final customerRef = _firestore.collection('customers').doc(customerId);
-    final doc = await customerRef.get();
+  Future<void> addCustomerTransaction(String customerId, LedgerTransaction transaction) async {
+    final docRef = _firestore.collection('customer_accounts').doc(customerId);
+    final doc = await docRef.get();
     if (!doc.exists) return;
     
-    final customer = ledger.CustomerAccount.fromMap(doc.id, doc.data()!);
+    final customer = CustomerAccount.fromMap(doc.id, doc.data()!);
     final newTransactions = [...customer.transactions, transaction];
     double newBalance;
     if (transaction.type == 'payment') {
@@ -80,39 +57,53 @@ class AccountProvider extends ChangeNotifier {
     } else {
       newBalance = customer.balance + transaction.amount;
     }
-    final updatedCustomer = customer.copyWith(balance: newBalance, transactions: newTransactions);
-    await customerRef.update(updatedCustomer.toMap());
+    final updated = customer.copyWith(balance: newBalance, transactions: newTransactions);
+    await docRef.update(updated.toMap());
     
     final index = _customers.indexWhere((c) => c.id == customerId);
-    if (index != -1) _customers[index] = updatedCustomer;
+    if (index != -1) _customers[index] = updated;
     notifyListeners();
   }
 
-  Future<void> addSupplier(ledger.SupplierAccount supplier) async {
-    await _firestore.collection('suppliers').doc(supplier.id).set(supplier.toMap());
+  // ========== دوال الموردين (من وجهة نظر الصيدلية) ==========
+
+  Future<void> loadSuppliersForPharmacy(String pharmacyId) async {
+    if (pharmacyId.isEmpty) return;
+    final snapshot = await _firestore
+        .collection('supplier_accounts')
+        .where('pharmacyId', isEqualTo: pharmacyId)
+        .get();
+    _suppliers = snapshot.docs
+        .map((doc) => SupplierAccount.fromMap(doc.id, doc.data()))
+        .toList();
+    notifyListeners();
+  }
+
+  Future<void> addSupplier(SupplierAccount supplier) async {
+    await _firestore.collection('supplier_accounts').doc(supplier.id).set(supplier.toMap());
     _suppliers.add(supplier);
     notifyListeners();
   }
 
-  Future<void> updateSupplier(ledger.SupplierAccount supplier) async {
-    await _firestore.collection('suppliers').doc(supplier.id).update(supplier.toMap());
+  Future<void> updateSupplier(SupplierAccount supplier) async {
+    await _firestore.collection('supplier_accounts').doc(supplier.id).update(supplier.toMap());
     final index = _suppliers.indexWhere((s) => s.id == supplier.id);
     if (index != -1) _suppliers[index] = supplier;
     notifyListeners();
   }
 
   Future<void> deleteSupplier(String id) async {
-    await _firestore.collection('suppliers').doc(id).delete();
+    await _firestore.collection('supplier_accounts').doc(id).delete();
     _suppliers.removeWhere((s) => s.id == id);
     notifyListeners();
   }
 
-  Future<void> addSupplierTransaction(String supplierId, ledger.LedgerTransaction transaction) async {
-    final supplierRef = _firestore.collection('suppliers').doc(supplierId);
-    final doc = await supplierRef.get();
+  Future<void> addSupplierTransaction(String supplierId, LedgerTransaction transaction) async {
+    final docRef = _firestore.collection('supplier_accounts').doc(supplierId);
+    final doc = await docRef.get();
     if (!doc.exists) return;
     
-    final supplier = ledger.SupplierAccount.fromMap(doc.id, doc.data()!);
+    final supplier = SupplierAccount.fromMap(doc.id, doc.data()!);
     final newTransactions = [...supplier.transactions, transaction];
     double newBalance;
     if (transaction.type == 'payment') {
@@ -120,16 +111,37 @@ class AccountProvider extends ChangeNotifier {
     } else {
       newBalance = supplier.balance + transaction.amount;
     }
-    final updatedSupplier = supplier.copyWith(balance: newBalance, transactions: newTransactions);
-    await supplierRef.update(updatedSupplier.toMap());
+    final updated = supplier.copyWith(balance: newBalance, transactions: newTransactions);
+    await docRef.update(updated.toMap());
     
     final index = _suppliers.indexWhere((s) => s.id == supplierId);
-    if (index != -1) _suppliers[index] = updatedSupplier;
+    if (index != -1) _suppliers[index] = updated;
     notifyListeners();
   }
 
-  Future<List<ledger.CustomerAccount>> getCustomersForBranch(String branchId) async {
-    final snapshot = await _firestore.collection('customers').where('branchId', isEqualTo: branchId).get();
-    return snapshot.docs.map((doc) => ledger.CustomerAccount.fromMap(doc.id, doc.data())).toList();
+  Future<SupplierAccount?> findSupplierByCompanyAndPharmacy(String companyId, String pharmacyId) async {
+    final snapshot = await _firestore
+        .collection('supplier_accounts')
+        .where('companyId', isEqualTo: companyId)
+        .where('pharmacyId', isEqualTo: pharmacyId)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isNotEmpty) {
+      return SupplierAccount.fromMap(snapshot.docs.first.id, snapshot.docs.first.data());
+    }
+    return null;
+  }
+
+  Future<CustomerAccount?> findCustomerByPharmacyAndCompany(String pharmacyId, String companyId) async {
+    final snapshot = await _firestore
+        .collection('customer_accounts')
+        .where('pharmacyId', isEqualTo: pharmacyId)
+        .where('companyId', isEqualTo: companyId)
+        .limit(1)
+        .get();
+    if (snapshot.docs.isNotEmpty) {
+      return CustomerAccount.fromMap(snapshot.docs.first.id, snapshot.docs.first.data());
+    }
+    return null;
   }
 }

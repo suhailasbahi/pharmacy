@@ -1,70 +1,4 @@
-class SupplierAccount {
-  final String id;
-  final String name;
-  final String phone;
-  final String? email;
-  final double balance;
-  final DateTime createdAt;
-  final List<LedgerTransaction> transactions;
-  final String? companyId; // الشركة التي يتبع لها هذا المورد
-
-  SupplierAccount({
-    required this.id,
-    required this.name,
-    required this.phone,
-    this.email,
-    this.balance = 0,
-    required this.createdAt,
-    this.transactions = const [],
-    this.companyId,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'phone': phone,
-      'email': email,
-      'balance': balance,
-      'createdAt': createdAt.toIso8601String(),
-      'transactions': transactions.map((t) => t.toMap()).toList(),
-      'companyId': companyId,
-    };
-  }
-
-  factory SupplierAccount.fromMap(String id, Map<String, dynamic> map) {
-    return SupplierAccount(
-      id: id,
-      name: map['name'] ?? '',
-      phone: map['phone'] ?? '',
-      email: map['email'],
-      balance: (map['balance'] ?? 0).toDouble(),
-      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
-      transactions: (map['transactions'] as List?)
-              ?.map((t) => LedgerTransaction.fromMap(t))
-              .toList() ??
-          [],
-      companyId: map['companyId'],
-    );
-  }
-
-  SupplierAccount copyWith({
-    double? balance,
-    List<LedgerTransaction>? transactions,
-    String? companyId,
-  }) {
-    return SupplierAccount(
-      id: id,
-      name: name,
-      phone: phone,
-      email: email,
-      balance: balance ?? this.balance,
-      createdAt: createdAt,
-      transactions: transactions ?? this.transactions,
-      companyId: companyId ?? this.companyId,
-    );
-  }
-}
-
+// حساب عميل (من وجهة نظر الشركة - الصيدليات التي تشتري منها)
 class CustomerAccount {
   final String id;
   final String pharmacyId;
@@ -74,7 +8,7 @@ class CustomerAccount {
   final DateTime createdAt;
   final List<LedgerTransaction> transactions;
   final String? branchId;
-  final String? companyId; // الشركة التي يتبع لها هذا العميل
+  final String companyId; // الشركة التي يتبع لها هذا العميل
 
   CustomerAccount({
     required this.id,
@@ -85,7 +19,7 @@ class CustomerAccount {
     required this.createdAt,
     this.transactions = const [],
     this.branchId,
-    this.companyId,
+    required this.companyId,
   });
 
   Map<String, dynamic> toMap() {
@@ -111,16 +45,11 @@ class CustomerAccount {
       createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
       transactions: (map['transactions'] as List?)?.map((t) => LedgerTransaction.fromMap(t)).toList() ?? [],
       branchId: map['branchId'],
-      companyId: map['companyId'],
+      companyId: map['companyId'] ?? '',
     );
   }
 
-  CustomerAccount copyWith({
-    double? balance,
-    List<LedgerTransaction>? transactions,
-    String? branchId,
-    String? companyId,
-  }) {
+  CustomerAccount copyWith({double? balance, List<LedgerTransaction>? transactions}) {
     return CustomerAccount(
       id: id,
       pharmacyId: pharmacyId,
@@ -129,18 +58,85 @@ class CustomerAccount {
       balance: balance ?? this.balance,
       createdAt: createdAt,
       transactions: transactions ?? this.transactions,
-      branchId: branchId ?? this.branchId,
-      companyId: companyId ?? this.companyId,
+      branchId: branchId,
+      companyId: companyId,
     );
   }
 }
 
+// حساب مورد (من وجهة نظر الصيدلية - الشركات التي تشتري منها)
+class SupplierAccount {
+  final String id;
+  final String companyId;      // ID الشركة الموردة
+  final String companyName;    // اسم الشركة الموردة
+  final String phone;
+  final String? email;
+  final double balance;
+  final DateTime createdAt;
+  final List<LedgerTransaction> transactions;
+  final String pharmacyId;     // الصيدلية التي يتبع لها هذا المورد
+
+  SupplierAccount({
+    required this.id,
+    required this.companyId,
+    required this.companyName,
+    required this.phone,
+    this.email,
+    this.balance = 0,
+    required this.createdAt,
+    this.transactions = const [],
+    required this.pharmacyId,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'companyId': companyId,
+      'companyName': companyName,
+      'phone': phone,
+      'email': email,
+      'balance': balance,
+      'createdAt': createdAt.toIso8601String(),
+      'transactions': transactions.map((t) => t.toMap()).toList(),
+      'pharmacyId': pharmacyId,
+    };
+  }
+
+  factory SupplierAccount.fromMap(String id, Map<String, dynamic> map) {
+    return SupplierAccount(
+      id: id,
+      companyId: map['companyId'] ?? '',
+      companyName: map['companyName'] ?? '',
+      phone: map['phone'] ?? '',
+      email: map['email'],
+      balance: (map['balance'] ?? 0).toDouble(),
+      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
+      transactions: (map['transactions'] as List?)?.map((t) => LedgerTransaction.fromMap(t)).toList() ?? [],
+      pharmacyId: map['pharmacyId'] ?? '',
+    );
+  }
+
+  SupplierAccount copyWith({double? balance, List<LedgerTransaction>? transactions}) {
+    return SupplierAccount(
+      id: id,
+      companyId: companyId,
+      companyName: companyName,
+      phone: phone,
+      email: email,
+      balance: balance ?? this.balance,
+      createdAt: createdAt,
+      transactions: transactions ?? this.transactions,
+      pharmacyId: pharmacyId,
+    );
+  }
+}
+
+// معاملة دفتر أستاذ (مشترك بين الطرفين)
 class LedgerTransaction {
   final String id;
   final double amount;
   final DateTime date;
   final String note;
-  final String type;
+  final String type; // 'purchase' (شراء/مبيعات) أو 'payment' (دفع)
 
   LedgerTransaction({
     required this.id,
@@ -166,7 +162,7 @@ class LedgerTransaction {
       amount: (map['amount'] ?? 0).toDouble(),
       date: DateTime.parse(map['date'] ?? DateTime.now().toIso8601String()),
       note: map['note'] ?? '',
-      type: map['type'] ?? 'adjustment',
+      type: map['type'] ?? 'purchase',
     );
   }
 }

@@ -43,7 +43,8 @@ class SupplierStatementScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('كشف حساب ${supplier.name}'),
+        // التصحيح هنا: استخدام companyName بدلاً من name
+        title: Text('كشف حساب ${supplier.companyName}'),
         centerTitle: true,
         backgroundColor: Colors.teal,
       ),

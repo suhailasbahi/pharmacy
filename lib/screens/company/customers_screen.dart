@@ -1,9 +1,9 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/account_model.dart';
-import 'customer_statement_screen.dart';
+import 'customer_statement_screen.dart'; // أضف هذا الـ import
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({Key? key}) : super(key: key);
@@ -23,88 +23,26 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _loadCustomers() async {
-  setState(() => _isLoading = true);
-  final auth = Provider.of<AuthService>(context, listen: false);
-  final companyId = auth.currentCompanyId ?? 'comp_001';
-  final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-  await accountProvider.loadCustomersForCompany(companyId);
-  List<CustomerAccount> customers = accountProvider.customers;
-  final effectiveBranchId = auth.getEffectiveBranchId();
-  if (effectiveBranchId != null) {
-    customers = customers.where((c) => c.branchId == effectiveBranchId).toList();
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId;
+    
+    if (companyId == null || auth.currentUserType != 'company') {
+      setState(() => _isLoading = false);
+      return;
+    }
+    
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    await accountProvider.loadCustomersForCompany(companyId);
+    
+    setState(() {
+      _customers = accountProvider.customers;
+      _isLoading = false;
+    });
   }
-  setState(() {
-    _customers = customers;
-    _isLoading = false;
-  });
-}
 
   Future<void> _refresh() async {
     await _loadCustomers();
-  }
-
-  
-  void _editCustomer(CustomerAccount customer) {
-    final nameController = TextEditingController(text: customer.pharmacyName);
-    final phoneController = TextEditingController(text: customer.phone);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تعديل العميل'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'اسم الصيدلية')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'الهاتف')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              final updated = CustomerAccount(
-                id: customer.id,
-                pharmacyId: customer.pharmacyId,
-                pharmacyName: nameController.text.trim(),
-                phone: phoneController.text.trim(),
-                balance: customer.balance,
-                createdAt: customer.createdAt,
-                transactions: customer.transactions,
-                branchId: customer.branchId,
-              );
-              await Provider.of<AccountProvider>(context, listen: false).updateCustomer(updated);
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التعديل')));
-            },
-            child: const Text('حفظ'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteCustomer(CustomerAccount customer) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('حذف العميل'),
-        content: Text('هل أنت متأكد من حذف ${customer.pharmacyName}؟'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              await Provider.of<AccountProvider>(context, listen: false).deleteCustomer(customer.id);
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحذف')));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('حذف'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _receivePayment(CustomerAccount customer) {
@@ -117,8 +55,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: amountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المبلغ')),
-            TextField(controller: noteController, decoration: const InputDecoration(labelText: 'ملاحظة')),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'المبلغ'),
+            ),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: 'ملاحظة'),
+            ),
           ],
         ),
         actions: [
@@ -127,6 +72,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
             onPressed: () async {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount <= 0) return;
+              
               final transaction = LedgerTransaction(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 amount: amount,
@@ -134,10 +80,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 note: noteController.text.trim(),
                 type: 'payment',
               );
-              await Provider.of<AccountProvider>(context, listen: false).addCustomerTransaction(customer.id, transaction);
+              
+              await Provider.of<AccountProvider>(context, listen: false)
+                  .addCustomerTransaction(customer.id, transaction);
+              
               Navigator.pop(ctx);
               _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم استلام مبلغ $amount')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('تم استلام مبلغ $amount')),
+              );
             },
             child: const Text('تسجيل'),
           ),
@@ -150,21 +101,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('حسابات العملاء'),
-          centerTitle: true,
-          backgroundColor: Colors.teal,
-        ),
+        appBar: AppBar(title: const Text('حسابات العملاء'), backgroundColor: Colors.teal),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
+    
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('حسابات العملاء'),
-        centerTitle: true,
-        backgroundColor: Colors.teal,
-        automaticallyImplyLeading: false,
-      ),
+      appBar: AppBar(title: const Text('حسابات العملاء'), backgroundColor: Colors.teal),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: _customers.isEmpty
@@ -191,34 +134,32 @@ class _CustomersScreenState extends State<CustomersScreen> {
                             children: [
                               Text('الهاتف: ${customer.phone}'),
                               const Divider(),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.receipt, color: Colors.teal),
+                                  // زر كشف حساب - الجديد
+                                  ElevatedButton.icon(
                                     onPressed: () {
-                                      Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerStatementScreen(customer: customer)));
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CustomerStatementScreen(customer: customer),
+                                        ),
+                                      );
                                     },
-                                    tooltip: 'كشف حساب',
+                                    icon: const Icon(Icons.receipt),
+                                    label: const Text('كشف حساب'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                                   ),
+                                  // زر استلام دفعة
                                   ElevatedButton.icon(
                                     onPressed: () => _receivePayment(customer),
                                     icon: const Icon(Icons.payment),
                                     label: const Text('استلام دفعة'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                                   ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _editCustomer(customer),
-                                    icon: const Icon(Icons.edit),
-                                    label: const Text('تعديل'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _deleteCustomer(customer),
-                                    icon: const Icon(Icons.delete),
-                                    label: const Text('حذف'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                                  ),
+                                  const Text('ملاحظة: الرصيد الموجب يعني دين على العميل'),
                                 ],
                               ),
                               const SizedBox(height: 12),
@@ -230,7 +171,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 itemBuilder: (ctx, idx) {
                                   final t = customer.transactions[idx];
                                   return ListTile(
-                                    title: Text('${t.amount > 0 ? '+' : ''}${t.amount.toStringAsFixed(2)}'),
+                                    title: Text('${t.type == 'payment' ? 'سداد' : 'مشتريات'}: ${t.amount.toStringAsFixed(2)}'),
                                     subtitle: Text(t.note),
                                     trailing: Text(_formatDate(t.date)),
                                   );
@@ -245,7 +186,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 },
               ),
       ),
-      
     );
   }
 

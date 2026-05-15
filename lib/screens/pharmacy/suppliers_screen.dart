@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
+import '../../services/auth_service.dart';
 import '../../models/account_model.dart';
 import 'supplier_statement_screen.dart';
 
@@ -23,8 +24,17 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
   Future<void> _loadSuppliers() async {
     setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final pharmacyId = auth.currentPharmacyId;
+    
+    if (pharmacyId == null || auth.currentUserType != 'pharmacy') {
+      setState(() => _isLoading = false);
+      return;
+    }
+    
     final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    await accountProvider.loadSuppliers();
+    await accountProvider.loadSuppliersForPharmacy(pharmacyId);
+    
     setState(() {
       _suppliers = accountProvider.suppliers;
       _isLoading = false;
@@ -35,83 +45,25 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     await _loadSuppliers();
   }
 
-  void _editSupplier(SupplierAccount supplier) {
-    final nameController = TextEditingController(text: supplier.name);
-    final phoneController = TextEditingController(text: supplier.phone);
-    final emailController = TextEditingController(text: supplier.email ?? '');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تعديل المورد'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'الاسم')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'الهاتف')),
-            TextField(controller: emailController, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              final updated = SupplierAccount(
-                id: supplier.id,
-                name: nameController.text.trim(),
-                phone: phoneController.text.trim(),
-                email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
-                balance: supplier.balance,
-                createdAt: supplier.createdAt,
-                transactions: supplier.transactions,
-                companyId: supplier.companyId,
-              );
-              await Provider.of<AccountProvider>(context, listen: false).updateSupplier(updated);
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم التعديل')));
-            },
-            child: const Text('حفظ'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteSupplier(SupplierAccount supplier) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('حذف المورد'),
-        content: Text('هل أنت متأكد من حذف ${supplier.name}؟'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              await Provider.of<AccountProvider>(context, listen: false).deleteSupplier(supplier.id);
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم الحذف')));
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('حذف'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _addTransaction(SupplierAccount supplier) {
+  void _makePayment(SupplierAccount supplier) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('تسديد دفعة لـ ${supplier.name}'),
+        title: Text('سداد دفعة لـ ${supplier.companyName}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: amountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المبلغ')),
-            TextField(controller: noteController, decoration: const InputDecoration(labelText: 'ملاحظة')),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'المبلغ'),
+            ),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: 'ملاحظة'),
+            ),
           ],
         ),
         actions: [
@@ -120,6 +72,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
             onPressed: () async {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount <= 0) return;
+              
               final transaction = LedgerTransaction(
                 id: DateTime.now().millisecondsSinceEpoch.toString(),
                 amount: amount,
@@ -127,10 +80,15 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                 note: noteController.text.trim(),
                 type: 'payment',
               );
-              await Provider.of<AccountProvider>(context, listen: false).addSupplierTransaction(supplier.id, transaction);
+              
+              await Provider.of<AccountProvider>(context, listen: false)
+                  .addSupplierTransaction(supplier.id, transaction);
+              
               Navigator.pop(ctx);
               _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم تسجيل دفعة بقيمة $amount')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('تم تسجيل سداد بمبلغ $amount')),
+              );
             },
             child: const Text('تسجيل'),
           ),
@@ -143,16 +101,13 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('حسابات الموردين'), centerTitle: true, backgroundColor: Colors.teal),
+        appBar: AppBar(title: const Text('حسابات الموردين'), backgroundColor: Colors.teal),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
+    
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('حسابات الموردين'),
-        centerTitle: true,
-        backgroundColor: Colors.teal,
-      ),
+      appBar: AppBar(title: const Text('حسابات الموردين'), backgroundColor: Colors.teal),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: _suppliers.isEmpty
@@ -165,10 +120,10 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ExpansionTile(
-                      title: Text(supplier.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      title: Text(supplier.companyName, style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text('الرصيد: ${supplier.balance.toStringAsFixed(2)}'),
                       leading: CircleAvatar(
-                        backgroundColor: supplier.balance > 0 ? Colors.green.shade100 : Colors.red.shade100,
+                        backgroundColor: supplier.balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
                         child: Text('${supplier.balance.toStringAsFixed(0)}'),
                       ),
                       children: [
@@ -178,39 +133,35 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('الهاتف: ${supplier.phone}'),
-                              if (supplier.email != null) Text('البريد: ${supplier.email}'),
                               const Divider(),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.receipt, color: Colors.teal),
+                                  ElevatedButton.icon(
                                     onPressed: () {
-                                      Navigator.push(context, MaterialPageRoute(builder: (_) => SupplierStatementScreen(supplier: supplier)));
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => SupplierStatementScreen(supplier: supplier),
+                                        ),
+                                      );
                                     },
-                                    tooltip: 'كشف حساب',
+                                    icon: const Icon(Icons.receipt),
+                                    label: const Text('كشف حساب'),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                                   ),
+                                  const SizedBox(width: 8),
                                   ElevatedButton.icon(
-                                    onPressed: () => _addTransaction(supplier),
+                                    onPressed: () => _makePayment(supplier),
                                     icon: const Icon(Icons.payment),
-                                    label: const Text('تسديد'),
+                                    label: const Text('سداد دفعة'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _editSupplier(supplier),
-                                    icon: const Icon(Icons.edit),
-                                    label: const Text('تعديل'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _deleteSupplier(supplier),
-                                    icon: const Icon(Icons.delete),
-                                    label: const Text('حذف'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 8),
+                              const Text('ملاحظة: الرصيد الموجب يعني دين عليك للمورد',
+                                style: TextStyle(fontSize: 12, color: Colors.grey)),
                               const SizedBox(height: 12),
                               const Text('سجل المعاملات:', style: TextStyle(fontWeight: FontWeight.bold)),
                               ListView.builder(
@@ -220,7 +171,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                                 itemBuilder: (ctx, idx) {
                                   final t = supplier.transactions[idx];
                                   return ListTile(
-                                    title: Text('${t.amount > 0 ? '+' : ''}${t.amount.toStringAsFixed(2)}'),
+                                    title: Text('${t.type == 'payment' ? 'سداد' : 'مشتريات'}: ${t.amount.toStringAsFixed(2)}'),
                                     subtitle: Text(t.note),
                                     trailing: Text(_formatDate(t.date)),
                                   );

@@ -15,6 +15,7 @@ class UserModel {
   final bool isApproved;
   final String? address;        // العنوان التفصيلي (مثال: "شارع التعاون، صنعاء")
   final String? companyId;
+  final String? pharmacyId;
   final String? regionId;        // جديد: معرف المنطقة (مثل 'sanaa', 'aden')
     
     final List<String> assignedRegions; // جديد (قائمة معرفات المناطق)
@@ -36,6 +37,7 @@ class UserModel {
     this.isApproved = false,
     this.address,
     this.companyId,
+    this.pharmacyId,
     this.regionId,
     this.assignedRegions = const [],
   });
@@ -57,6 +59,7 @@ class UserModel {
       'isApproved': isApproved,
       'address': address,
       'companyId': companyId,
+      'pharmacyId': pharmacyId,
       'regionId': regionId,
       'assignedRegions': assignedRegions,
     };
@@ -80,6 +83,7 @@ class UserModel {
       isApproved: map['isApproved'] ?? false,
       address: map['address'],
       companyId: map['companyId'],
+      pharmacyId: map['pharmacyId'],
       regionId: map['regionId'],
       assignedRegions: List<String>.from(map['assignedRegions'] ?? []),
     );

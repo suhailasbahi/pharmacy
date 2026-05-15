@@ -22,14 +22,17 @@ class _CompanyDashboardState extends State<CompanyDashboard> {
     super.initState();
     _loadOrders();
   }
-
-  Future<void> _loadOrders() async {
-    setState(() => _isLoading = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId ?? 'comp_001';
-    final branchId = auth.getEffectiveBranchId();
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
+Future<void> _loadOrders() async {
+  setState(() => _isLoading = true);
+  final auth = Provider.of<AuthService>(context, listen: false);
+  final companyId = auth.currentCompanyId;
+  if (companyId == null) {
+    setState(() => _isLoading = false);
+    return;
+  }
+  final branchId = auth.getEffectiveBranchId();
+  final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+  final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
     final citiesSet = <String>{};
     for (var order in orders) {
       if (order.pharmacyCity.isNotEmpty) {

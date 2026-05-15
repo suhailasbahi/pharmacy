@@ -13,6 +13,7 @@ class AuthService extends ChangeNotifier {
   String? _currentUserType;
   String? _currentCompanyId;
   String? _currentPharmacyName;
+     String? _currentPharmacyId;
   String? _currentRegionId;
   bool _isLoggedIn = false;
   bool _isGuest = false;
@@ -27,6 +28,7 @@ class AuthService extends ChangeNotifier {
   String? get currentCompanyName => _currentUserModel?.name;
   String? get currentCompanyId => _currentCompanyId;
   String? get currentPharmacyName => _currentPharmacyName;
+    String? get currentPharmacyId => _currentPharmacyId;
   String? get currentRegionId => _currentRegionId;
   bool get isLoggedIn => _isLoggedIn;
   bool get isGuest => _isGuest;
@@ -94,76 +96,120 @@ class AuthService extends ChangeNotifier {
 
   // ========== تسجيل الدخول ==========
   Future<void> login(String email, String password) async {
-    try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      String uid = userCredential.user!.uid;
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
-      if (!doc.exists) throw Exception('المستخدم غير موجود في قاعدة البيانات');
-      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      if (data['isDeleted'] == true) throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
+  try {
+    print('1. Attempting sign in...');
+    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    String uid = userCredential.user!.uid;
+    print('2. Signed in with UID: $uid');
 
-      _currentUserModel = UserModel.fromMap(uid, data);
-      _currentUserType = _currentUserModel!.userType;
-      _currentCompanyId = _currentUserModel!.parentCompanyId ?? _currentUserModel!.companyId;
-      _currentPharmacyName = _currentUserModel!.name;
-      _currentRegionId = _currentUserModel!.regionId ?? 'sanaa';
-      _currentRoleId = _currentUserModel!.roleId;
-      _currentPermissions = await _getRolePermissions(_currentRoleId!);
-      _currentCustomPermissions = _currentUserModel!.customPermissions;
-      _currentBranchId = _currentUserModel!.branchId;
-      _currentCompanyName = _currentUserModel!.name;
-      _isLoggedIn = true;
-      _isGuest = false;
-      notifyListeners();
-    } catch (e) {
-      throw Exception('فشل تسجيل الدخول: ${e.toString()}');
+    print('3. Fetching user document from Firestore...');
+    DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
+    print('4. Document exists: ${doc.exists}');
+    
+    if (!doc.exists) {
+      print('❌ Document not found for UID: $uid');
+      throw Exception('المستخدم غير موجود في قاعدة البيانات');
     }
-  }
+    
+    print('5. Converting document data...');
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    print('6. Data keys: ${data.keys}');
+    
+    if (data['isDeleted'] == true) {
+      throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
+    }
 
+    print('7. Creating UserModel from data...');
+    _currentUserModel = UserModel.fromMap(uid, data);
+    print('8. UserModel created successfully');
+    
+    _currentUserType = _currentUserModel!.userType;
+    _currentCompanyId = _currentUserModel!.companyId;
+    _currentPharmacyName = _currentUserModel!.name;
+      _currentPharmacyId = _currentUserModel!.id;
+    _currentRegionId = _currentUserModel!.regionId ?? 'sanaa';
+    _currentRoleId = _currentUserModel!.roleId;
+    _currentPermissions = await _getRolePermissions(_currentRoleId!);
+    _currentCustomPermissions = _currentUserModel!.customPermissions;
+    _currentBranchId = _currentUserModel!.branchId;
+    _currentCompanyName = _currentUserModel!.name;
+    _isLoggedIn = true;
+    _isGuest = false;
+    
+    print('9. Login completed successfully!');
+    notifyListeners();
+  } catch (e, stackTrace) {
+    print('❌ Login error: $e');
+    print(stackTrace);
+    throw Exception('فشل تسجيل الدخول: ${e.toString()}');
+  }
+}
   // ========== إنشاء حساب جديد ==========
   Future<void> register({
-    required String email,
-    required String password,
-    required String name,
-    required String phone,
-    required String userType,
-    required String licenseNumber,
-    required String regionId,
-    String? address,
-  }) async {
-    try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      String uid = userCredential.user!.uid;
-      UserModel newUser = UserModel(
-        id: uid,
-        email: email,
-        name: name,
-        phone: phone,
-        userType: userType,
-        parentCompanyId: userType == 'sub_account' ? null : uid,
-        branchId: null,
-        roleId: userType == 'company' ? 'role_owner' : 'role_pharmacy_owner',
-        customPermissions: [],
-        isActive: true,
-        createdAt: DateTime.now(),
-        licenseNumber: licenseNumber,
-        isApproved: userType == 'pharmacy' ? false : true,
-        address: address,
-        regionId: regionId,
-        assignedRegions: userType == 'company' ? Region.allRegions.map((r) => r.id).toList() : [],
-      );
-      await _firestore.collection('users').doc(uid).set(newUser.toMap());
-      await login(email, password);
-    } catch (e) {
-      throw Exception('فشل إنشاء الحساب: ${e.toString()}');
+  required String email,
+  required String password,
+  required String name,
+  required String phone,
+  required String userType,
+  required String licenseNumber,
+  required String regionId,
+  String? address,
+}) async {
+  try {
+    UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    String uid = userCredential.user!.uid;
+    
+    // ===== تعيين المعرفات حسب نوع المستخدم =====
+    String? companyId;
+    String? pharmacyId;
+    
+    if (userType == 'company') {
+      // الشركة: companyId = uid (نفس معرف المستخدم)
+      companyId = uid;
+      pharmacyId = null;
+    } else if (userType == 'pharmacy') {
+      // الصيدلية: pharmacyId = uid
+      companyId = null;
+      pharmacyId = uid;
+    } else {
+      // حساب فرعي: سيتم تعيينه لاحقاً من parentCompanyId
+      companyId = null;
+      pharmacyId = null;
     }
+    
+    UserModel newUser = UserModel(
+      id: uid,
+      email: email,
+      name: name,
+      phone: phone,
+      userType: userType,
+      parentCompanyId: null,
+      branchId: null,
+      roleId: userType == 'company' ? 'role_owner' : 'role_pharmacy_owner',
+      customPermissions: [],
+      isActive: true,
+      createdAt: DateTime.now(),
+      licenseNumber: licenseNumber,
+      isApproved: userType == 'pharmacy' ? false : true,
+      address: address ?? '',
+      companyId: companyId,     // 🔥 هنا كان العيب
+      pharmacyId: pharmacyId,   // 🔥 هنا كان العيب
+      regionId: regionId,
+      assignedRegions: userType == 'company' ? Region.allRegions.map((r) => r.id).toList() : [],
+    );
+    
+    await _firestore.collection('users').doc(uid).set(newUser.toMap());
+    await login(email, password);
+  } catch (e) {
+    throw Exception('فشل إنشاء الحساب: ${e.toString()}');
   }
+}
 
   // ========== تسجيل الخروج ==========
   Future<void> logout() async {

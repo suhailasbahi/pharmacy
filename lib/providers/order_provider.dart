@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/order_model.dart';
 import '../models/cart_item.dart';
-import '../models/account_model.dart' as ledger;
+import '../models/account_model.dart';
 import 'account_provider.dart';
 
 class OrderProvider extends ChangeNotifier {
@@ -65,108 +65,108 @@ class OrderProvider extends ChangeNotifier {
     }
     notifyListeners();
   }
+Future<void> acceptOrder(String orderId, AccountProvider accountProvider) async {
+  final docRef = _firestore.collection('orders').doc(orderId);
+  final doc = await docRef.get();
+  if (!doc.exists) return;
+  final order = OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+  if (order.status != 'pending') return;
 
-  Future<void> acceptOrder(String orderId, AccountProvider accountProvider) async {
-    final docRef = _firestore.collection('orders').doc(orderId);
-    final doc = await docRef.get();
-    if (!doc.exists) return;
-    final order = OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-    if (order.status != 'pending') return;
-
-    await docRef.update({'status': 'accepted'});
-    
-    final index = _orders.indexWhere((o) => o.id == orderId);
-    if (index != -1) {
-      _orders[index] = OrderModel(
-        id: _orders[index].id,
-        pharmacyId: _orders[index].pharmacyId,
-        pharmacyName: _orders[index].pharmacyName,
-        pharmacyCity: _orders[index].pharmacyCity,
-        regionId: _orders[index].regionId,
-        companyId: _orders[index].companyId,
-        companyName: _orders[index].companyName,
-        items: _orders[index].items,
-        totalPrice: _orders[index].totalPrice,
-        status: 'accepted',
-        date: _orders[index].date,
-        paymentType: _orders[index].paymentType,
-        paymentMethod: _orders[index].paymentMethod,
-        creditDays: _orders[index].creditDays,
-        createdBy: _orders[index].createdBy,
-        assignedTo: _orders[index].assignedTo,
-        branchId: _orders[index].branchId,
-      );
-      notifyListeners();
-    }
-
-    if (order.paymentType == 'credit') {
-      ledger.CustomerAccount? existingCustomer;
-      try {
-        existingCustomer = accountProvider.customers.firstWhere(
-          (c) => c.pharmacyId == order.pharmacyId,
-        );
-      } catch (e) {
-        existingCustomer = null;
-      }
-      
-      final transaction = ledger.LedgerTransaction(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        amount: order.totalPrice,
-        date: DateTime.now(),
-        note: 'طلب #${order.id.substring(0,8)} - شراء أدوية أجل',
-        type: 'purchase',
-      );
-      
-      if (existingCustomer != null) {
-        await accountProvider.addCustomerTransaction(existingCustomer.id, transaction);
-      } else {
-        final newCustomer = ledger.CustomerAccount(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          pharmacyId: order.pharmacyId,
-          pharmacyName: order.pharmacyName,
-          phone: '',
-          balance: order.totalPrice,
-          createdAt: DateTime.now(),
-          transactions: [transaction],
-          branchId: order.branchId,
-          companyId: order.companyId, 
-        );
-        await accountProvider.addCustomer(newCustomer);
-      }
-      
-      ledger.SupplierAccount? existingSupplier;
-      try {
-        existingSupplier = accountProvider.suppliers.firstWhere(
-          (s) => s.name == order.companyName,
-        );
-      } catch (e) {
-        existingSupplier = null;
-      }
-      
-      final supplierTransaction = ledger.LedgerTransaction(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        amount: order.totalPrice,
-        date: DateTime.now(),
-        note: 'طلب #${order.id.substring(0,8)} - شراء أدوية أجل',
-        type: 'purchase',
-      );
-      
-      if (existingSupplier != null) {
-        await accountProvider.addSupplierTransaction(existingSupplier.id, supplierTransaction);
-      } else {
-        final newSupplier = ledger.SupplierAccount(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          name: order.companyName,
-          phone: '',
-          balance: order.totalPrice,
-          createdAt: DateTime.now(),
-          transactions: [supplierTransaction],
-        );
-        await accountProvider.addSupplier(newSupplier);
-      }
-    }
+  await docRef.update({'status': 'accepted'});
+  
+  // تحديث الحالة في القائمة المحلية
+  final index = _orders.indexWhere((o) => o.id == orderId);
+  if (index != -1) {
+    _orders[index] = OrderModel(
+      id: _orders[index].id,
+      pharmacyId: _orders[index].pharmacyId,
+      pharmacyName: _orders[index].pharmacyName,
+      pharmacyCity: _orders[index].pharmacyCity,
+      regionId: _orders[index].regionId,
+      companyId: _orders[index].companyId,
+      companyName: _orders[index].companyName,
+      items: _orders[index].items,
+      totalPrice: _orders[index].totalPrice,
+      status: 'accepted',
+      date: _orders[index].date,
+      paymentType: _orders[index].paymentType,
+      paymentMethod: _orders[index].paymentMethod,
+      creditDays: _orders[index].creditDays,
+      createdBy: _orders[index].createdBy,
+      assignedTo: _orders[index].assignedTo,
+      branchId: _orders[index].branchId,
+    );
+    notifyListeners();
   }
 
+  // ===== معالجة الحسابات (فقط للطلبات الآجلة) =====
+  if (order.paymentType == 'credit') {
+    
+    // 1. تسجيل معاملة في حساب العميل (من وجهة نظر الشركة)
+    //    العميل = الصيدلية التي اشترت بالأجل
+    final existingCustomer = await accountProvider.findCustomerByPharmacyAndCompany(
+      order.pharmacyId, 
+      order.companyId,
+    );
+    
+    final customerTransaction = LedgerTransaction(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      amount: order.totalPrice,
+      date: DateTime.now(),
+      note: 'طلب #${order.id.substring(0,8)} - مبيعات أجل',
+      type: 'purchase', // مشتريات العميل تزيد رصيده (دين عليه)
+    );
+    
+    if (existingCustomer != null) {
+      await accountProvider.addCustomerTransaction(existingCustomer.id, customerTransaction);
+    } else {
+      final newCustomer = CustomerAccount(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        pharmacyId: order.pharmacyId,
+        pharmacyName: order.pharmacyName,
+        phone: '',
+        balance: order.totalPrice,
+        createdAt: DateTime.now(),
+        transactions: [customerTransaction],
+        branchId: order.branchId,
+        companyId: order.companyId,
+      );
+      await accountProvider.addCustomer(newCustomer);
+    }
+    
+    // 2. تسجيل معاملة في حساب المورد (من وجهة نظر الصيدلية)
+    //    المورد = الشركة التي اشترت منها الصيدلية بالأجل
+    final existingSupplier = await accountProvider.findSupplierByCompanyAndPharmacy(
+      order.companyId, 
+      order.pharmacyId,
+    );
+    
+    final supplierTransaction = LedgerTransaction(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      amount: order.totalPrice,
+      date: DateTime.now(),
+      note: 'طلب #${order.id.substring(0,8)} - مشتريات أجل',
+      type: 'purchase', // مشتريات من مورد تزيد رصيد المورد (دين على الصيدلية)
+    );
+    
+    if (existingSupplier != null) {
+      await accountProvider.addSupplierTransaction(existingSupplier.id, supplierTransaction);
+    } else {
+      final newSupplier = SupplierAccount(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        companyId: order.companyId,
+        companyName: order.companyName,
+        phone: '',
+        balance: order.totalPrice,
+        createdAt: DateTime.now(),
+        transactions: [supplierTransaction],
+        pharmacyId: order.pharmacyId,
+      );
+      await accountProvider.addSupplier(newSupplier);
+    }
+  }
+}
+  
   Future<void> rejectOrder(String orderId, String? rejectionReason, AccountProvider? accountProvider) async {
     final docRef = _firestore.collection('orders').doc(orderId);
     await docRef.update({

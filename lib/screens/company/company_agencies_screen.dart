@@ -5,7 +5,6 @@ import '../../models/agency_model.dart';
 import '../../providers/product_provider.dart';
 import '../../widgets/company_product_card.dart';
 import '../../services/auth_service.dart';
-import '../../models/product_model.dart';
 
 class CompanyAgenciesScreen extends StatefulWidget {
   @override
@@ -20,37 +19,38 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAgencies();
+    _loadData();
   }
 
-  Future<void> _loadAgencies() async {
-  setState(() => _isLoading = true);
-  final auth = Provider.of<AuthService>(context, listen: false);
-  final companyId = auth.currentCompanyId ?? 'comp_001';
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final companyId = auth.currentCompanyId ?? 'comp_001';
 
-  // ** الخطوة المهمة: تحميل المنتجات أولاً **
-  final productProvider = Provider.of<ProductProvider>(context, listen: false);
-  await productProvider.loadProducts(companyId);
+    // 1. تحميل المنتجات مرة واحدة فقط (ستستخدمها AgencyCard)
+    final productProvider = Provider.of<ProductProvider>(context, listen: false);
+    await productProvider.loadProducts(companyId);
 
-  // ثم تحميل الوكالات
-  final snapshot = await _firestore
-      .collection('agencies')
-      .where('companyId', isEqualTo: companyId)
-      .get();
-  final agencies = snapshot.docs
-      .map((doc) => AgencyModel.fromMap(doc.id, doc.data()))
-      .toList();
+    // 2. تحميل الوكالات
+    final snapshot = await _firestore
+        .collection('agencies')
+        .where('companyId', isEqualTo: companyId)
+        .get();
+    final agencies = snapshot.docs
+        .map((doc) => AgencyModel.fromMap(doc.id, doc.data()))
+        .toList();
 
-  setState(() {
-    _agencies = agencies;
-    _isLoading = false;
-  });
-}
-    
+    setState(() {
+      _agencies = agencies;
+      _isLoading = false;
+    });
+  }
+
   Future<void> _refresh() async {
-    await _loadAgencies();
+    await _loadData();
   }
-
+    
+    
   void _addAgency() {
     final nameController = TextEditingController();
     bool isAdding = false;
@@ -245,15 +245,13 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     }
   }
 
-  @override
+   
+           @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(
-            title: const Text('الوكالات'),
-            centerTitle: true,
-            backgroundColor: Colors.teal),
+        appBar: AppBar(title: const Text('الوكالات'), centerTitle: true, backgroundColor: Colors.teal),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -289,7 +287,8 @@ class _CompanyAgenciesScreenState extends State<CompanyAgenciesScreen> {
     );
   }
 }
-                            
+
+// ========== AgencyCard المعدل ==========
 class AgencyCard extends StatelessWidget {
   final AgencyModel agency;
   final VoidCallback onEdit;
@@ -304,6 +303,11 @@ class AgencyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final productProvider = Provider.of<ProductProvider>(context);
+    final agencyProducts = productProvider.products
+        .where((p) => p.agencyId == agency.id)
+        .toList();
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -312,18 +316,15 @@ class AgencyCard extends StatelessWidget {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-              color: Colors.teal.shade100, borderRadius: BorderRadius.circular(10)),
+            color: Colors.teal.shade100,
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: const Icon(Icons.store, color: Colors.teal),
         ),
         title: Text(agency.name,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: FutureBuilder<int>(
-          future: _countProducts(),
-          builder: (context, snapshot) {
-            final count = snapshot.data ?? 0;
-            return Text('$count منتج', style: const TextStyle(fontSize: 12));
-          },
-        ),
+        subtitle: Text('${agencyProducts.length} منتج',
+            style: const TextStyle(fontSize: 12)),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -352,8 +353,7 @@ class AgencyCard extends StatelessWidget {
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content:
-                                  Text('إضافة منتج للوكالة من شاشة إضافة دواء'),
+                              content: Text('إضافة منتج للوكالة من شاشة إضافة دواء'),
                               backgroundColor: Colors.orange),
                         );
                       },
@@ -363,34 +363,24 @@ class AgencyCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                FutureBuilder<List<ProductModel>>(
-                  future: _loadProducts(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(
-                          child: Text('لا توجد منتجات في هذه الوكالة',
-                              style: TextStyle(color: Colors.grey)));
-                    }
-                    final products = snapshot.data!;
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 0.7,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
+                agencyProducts.isEmpty
+                    ? const Center(
+                        child: Text('لا توجد منتجات في هذه الوكالة',
+                            style: TextStyle(color: Colors.grey)))
+                    : GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          childAspectRatio: 0.7,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: agencyProducts.length,
+                        itemBuilder: (context, index) =>
+                            CompanyProductCard(product: agencyProducts[index]),
                       ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) =>
-                          CompanyProductCard(product: products[index]),
-                    );
-                  },
-                ),
               ],
             ),
           ),
@@ -398,19 +388,5 @@ class AgencyCard extends StatelessWidget {
       ),
     );
   }
-
-  Future<int> _countProducts() async {
-    final products = await _loadProducts();
-    return products.length;
-  }
-
-  Future<List<ProductModel>> _loadProducts() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('products')
-        .where('agencyId', isEqualTo: agency.id)
-        .get();
-    return snapshot.docs
-        .map((doc) => ProductModel.fromMap(doc.id, doc.data() as Map<String, dynamic>))
-        .toList();
-  }
 }
+   
