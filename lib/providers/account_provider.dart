@@ -25,11 +25,54 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addCustomer(CustomerAccount customer) async {
-    await _firestore.collection('customer_accounts').doc(customer.id).set(customer.toMap());
-    _customers.add(customer);
-    notifyListeners();
-  }
+  Future<void> addCustomerTransaction(
+  String customerId,
+  LedgerTransaction transaction,
+) async {
+  final docRef =
+      _firestore.collection('customer_accounts').doc(customerId);
+
+  await _firestore.runTransaction((trx) async {
+    final snapshot = await trx.get(docRef);
+
+    if (!snapshot.exists) {
+      throw Exception('Customer account not found');
+    }
+
+    final customer = CustomerAccount.fromMap(
+      snapshot.id,
+      snapshot.data()!,
+    );
+
+    final newTransactions = [
+      ...customer.transactions,
+      transaction,
+    ];
+
+    double newBalance;
+
+    if (transaction.type == 'payment') {
+      newBalance = customer.balance - transaction.amount;
+    } else {
+      newBalance = customer.balance + transaction.amount;
+    }
+
+    final updated = customer.copyWith(
+      balance: newBalance,
+      transactions: newTransactions,
+    );
+
+    trx.update(docRef, updated.toMap());
+
+    final index = _customers.indexWhere((c) => c.id == customerId);
+
+    if (index != -1) {
+      _customers[index] = updated;
+    }
+  });
+
+  notifyListeners();
+}
 
   Future<void> updateCustomer(CustomerAccount customer) async {
     await _firestore.collection('customer_accounts').doc(customer.id).update(customer.toMap());
@@ -44,26 +87,6 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addCustomerTransaction(String customerId, LedgerTransaction transaction) async {
-    final docRef = _firestore.collection('customer_accounts').doc(customerId);
-    final doc = await docRef.get();
-    if (!doc.exists) return;
-    
-    final customer = CustomerAccount.fromMap(doc.id, doc.data()!);
-    final newTransactions = [...customer.transactions, transaction];
-    double newBalance;
-    if (transaction.type == 'payment') {
-      newBalance = customer.balance - transaction.amount;
-    } else {
-      newBalance = customer.balance + transaction.amount;
-    }
-    final updated = customer.copyWith(balance: newBalance, transactions: newTransactions);
-    await docRef.update(updated.toMap());
-    
-    final index = _customers.indexWhere((c) => c.id == customerId);
-    if (index != -1) _customers[index] = updated;
-    notifyListeners();
-  }
 
   // ========== دوال الموردين (من وجهة نظر الصيدلية) ==========
 
@@ -79,11 +102,54 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addSupplier(SupplierAccount supplier) async {
-    await _firestore.collection('supplier_accounts').doc(supplier.id).set(supplier.toMap());
-    _suppliers.add(supplier);
-    notifyListeners();
-  }
+  Future<void> addSupplierTransaction(
+  String supplierId,
+  LedgerTransaction transaction,
+) async {
+  final docRef =
+      _firestore.collection('supplier_accounts').doc(supplierId);
+
+  await _firestore.runTransaction((trx) async {
+    final snapshot = await trx.get(docRef);
+
+    if (!snapshot.exists) {
+      throw Exception('Supplier account not found');
+    }
+
+    final supplier = SupplierAccount.fromMap(
+      snapshot.id,
+      snapshot.data()!,
+    );
+
+    final newTransactions = [
+      ...supplier.transactions,
+      transaction,
+    ];
+
+    double newBalance;
+
+    if (transaction.type == 'payment') {
+      newBalance = supplier.balance - transaction.amount;
+    } else {
+      newBalance = supplier.balance + transaction.amount;
+    }
+
+    final updated = supplier.copyWith(
+      balance: newBalance,
+      transactions: newTransactions,
+    );
+
+    trx.update(docRef, updated.toMap());
+
+    final index = _suppliers.indexWhere((s) => s.id == supplierId);
+
+    if (index != -1) {
+      _suppliers[index] = updated;
+    }
+  });
+
+  notifyListeners();
+}
 
   Future<void> updateSupplier(SupplierAccount supplier) async {
     await _firestore.collection('supplier_accounts').doc(supplier.id).update(supplier.toMap());
@@ -98,26 +164,6 @@ class AccountProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addSupplierTransaction(String supplierId, LedgerTransaction transaction) async {
-    final docRef = _firestore.collection('supplier_accounts').doc(supplierId);
-    final doc = await docRef.get();
-    if (!doc.exists) return;
-    
-    final supplier = SupplierAccount.fromMap(doc.id, doc.data()!);
-    final newTransactions = [...supplier.transactions, transaction];
-    double newBalance;
-    if (transaction.type == 'payment') {
-      newBalance = supplier.balance - transaction.amount;
-    } else {
-      newBalance = supplier.balance + transaction.amount;
-    }
-    final updated = supplier.copyWith(balance: newBalance, transactions: newTransactions);
-    await docRef.update(updated.toMap());
-    
-    final index = _suppliers.indexWhere((s) => s.id == supplierId);
-    if (index != -1) _suppliers[index] = updated;
-    notifyListeners();
-  }
 
   Future<SupplierAccount?> findSupplierByCompanyAndPharmacy(String companyId, String pharmacyId) async {
     final snapshot = await _firestore
