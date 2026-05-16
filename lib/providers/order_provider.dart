@@ -67,259 +67,152 @@ class OrderProvider extends ChangeNotifier {
   }
 
   Future<void> acceptOrder(
-  String orderId,
-  AccountProvider accountProvider,
-) async {
-  try {
-    final orderRef = _firestore.collection('orders').doc(orderId);
+    String orderId,
+    AccountProvider accountProvider,
+  ) async {
+    try {
+      final orderRef = _firestore.collection('orders').doc(orderId);
 
-    await _firestore.runTransaction((trx) async {
+      await _firestore.runTransaction((trx) async {
+        final orderSnapshot = await trx.get(orderRef);
 
-      final orderSnapshot = await trx.get(orderRef);
+        if (!orderSnapshot.exists) {
+          throw Exception('Order not found');
+        }
 
-      if (!orderSnapshot.exists) {
-        throw Exception('Order not found');
-      }
-
-      final order = OrderModel.fromMap(
-        orderSnapshot.id,
-        orderSnapshot.data() as Map<String, dynamic>,
-      );
-
-      // حماية من التكرار
-      if (order.status != 'pending') {
-        throw Exception('Order already processed');
-      }
-
-      // تحديث حالة الطلب
-      trx.update(orderRef, {
-        'status': 'accepted',
-      });
-
-      // ===== الطلبات الآجلة فقط =====
-
-      if (order.paymentType == 'credit') {
-
-        // =====================================================
-        // Customer Account
-        // =====================================================
-
-        final customerQuery = await _firestore
-            .collection('customer_accounts')
-            .where('pharmacyId', isEqualTo: order.pharmacyId)
-            .where('companyId', isEqualTo: order.companyId)
-            .limit(1)
-            .get();
-
-        final customerTransaction = LedgerTransaction(
-          id: _firestore.collection('tmp').doc().id,
-          amount: order.totalPrice,
-          date: DateTime.now(),
-          note:
-              'طلب #${order.id.substring(0, 8)} - مبيعات آجل',
-          type: 'purchase',
+        final order = OrderModel.fromMap(
+          orderSnapshot.id,
+          orderSnapshot.data() as Map<String, dynamic>,
         );
 
-        if (customerQuery.docs.isNotEmpty) {
+        // منع التكرار
+        if (order.status != 'pending') {
+          throw Exception('Order already processed');
+        }
 
-          final customerDoc = customerQuery.docs.first;
+        // تحديث حالة الطلب
+        trx.update(orderRef, {
+          'status': 'accepted',
+        });
 
-          final customer = CustomerAccount.fromMap(
-            customerDoc.id,
-            customerDoc.data(),
-          );
-
-          final updatedTransactions = [
-            ...customer.transactions,
-            customerTransaction,
-          ];
-
-          final newBalance =
-              customer.balance + order.totalPrice;
-
-          trx.update(
-            customerDoc.reference,
-            {
-              'balance': newBalance,
-              'transactions': updatedTransactions
-                  .map((e) => e.toMap())
-                  .toList(),
-            },
-          );
-
-        } else {
-
-          final newCustomerRef = _firestore
-              .collection('customer_accounts')
-              .doc();
-
-          final newCustomer = CustomerAccount(
-            id: newCustomerRef.id,
+        // ===== الطلبات الآجلة فقط =====
+        if (order.paymentType == 'credit') {
+          // =====================================================
+          // 1. إنشاء/الحصول على حساب العميل (Customer Account)
+          // =====================================================
+          final customer = await accountProvider.getOrCreateCustomer(
             pharmacyId: order.pharmacyId,
             pharmacyName: order.pharmacyName,
-            phone: '',
-            balance: order.totalPrice,
-            createdAt: DateTime.now(),
-            transactions: [customerTransaction],
-            branchId: order.branchId,
             companyId: order.companyId,
+            branchId: order.branchId,
           );
 
-          trx.set(
-            newCustomerRef,
-            newCustomer.toMap(),
-          );
-        }
-
-        // =====================================================
-        // Supplier Account
-        // =====================================================
-
-        final supplierQuery = await _firestore
-            .collection('supplier_accounts')
-            .where('companyId', isEqualTo: order.companyId)
-            .where('pharmacyId', isEqualTo: order.pharmacyId)
-            .limit(1)
-            .get();
-
-        final supplierTransaction = LedgerTransaction(
-          id: _firestore.collection('tmp').doc().id,
-          amount: order.totalPrice,
-          date: DateTime.now(),
-          note:
-              'طلب #${order.id.substring(0, 8)} - مشتريات آجل',
-          type: 'purchase',
-        );
-
-        if (supplierQuery.docs.isNotEmpty) {
-
-          final supplierDoc = supplierQuery.docs.first;
-
-          final supplier = SupplierAccount.fromMap(
-            supplierDoc.id,
-            supplierDoc.data(),
-          );
-
-          final updatedTransactions = [
-            ...supplier.transactions,
-            supplierTransaction,
-          ];
-
-          final newBalance =
-              supplier.balance + order.totalPrice;
-
-          trx.update(
-            supplierDoc.reference,
-            {
-              'balance': newBalance,
-              'transactions': updatedTransactions
-                  .map((e) => e.toMap())
-                  .toList(),
-            },
-          );
-
-        } else {
-
-          final newSupplierRef = _firestore
-              .collection('supplier_accounts')
-              .doc();
-
-          final newSupplier = SupplierAccount(
-            id: newSupplierRef.id,
+          // =====================================================
+          // 2. إنشاء/الحصول على حساب المورد (Supplier Account)
+          // =====================================================
+          final supplier = await accountProvider.getOrCreateSupplier(
             companyId: order.companyId,
             companyName: order.companyName,
-            phone: '',
-            balance: order.totalPrice,
-            createdAt: DateTime.now(),
-            transactions: [supplierTransaction],
             pharmacyId: order.pharmacyId,
           );
 
-          trx.set(
-            newSupplierRef,
-            newSupplier.toMap(),
+          // =====================================================
+          // 3. إضافة معاملة العميل (Customer Ledger Entry)
+          // =====================================================
+          await accountProvider.createOrderLedgerEntry(
+            orderId: order.id,
+            accountId: customer.id,
+            accountType: 'customer',
+            amount: order.totalPrice,
+            direction: 'sale',
+            companyId: order.companyId,
+            pharmacyId: order.pharmacyId,
           );
+
+          // =====================================================
+          // 4. إضافة معاملة المورد (Supplier Ledger Entry)
+          // =====================================================
+          await accountProvider.createOrderLedgerEntry(
+            orderId: order.id,
+            accountId: supplier.id,
+            accountType: 'supplier',
+            amount: order.totalPrice,
+            direction: 'purchase',
+            companyId: order.companyId,
+            pharmacyId: order.pharmacyId,
+          );
+
+          // =====================================================
+          // 5. تسجيل في السجل المالي الرئيسي (Financial Ledger)
+          // =====================================================
+          final customerLedgerRef = _firestore
+              .collection('financial_transactions')
+              .doc();
+
+          trx.set(customerLedgerRef, {
+            'id': customerLedgerRef.id,
+            'type': 'customer_credit',
+            'accountType': 'customer',
+            'pharmacyId': order.pharmacyId,
+            'companyId': order.companyId,
+            'orderId': order.id,
+            'amount': order.totalPrice,
+            'createdAt': Timestamp.now(),
+            'note': 'مبيعات آجل للطلب #${order.id.substring(0, 8)}',
+          });
+
+          final supplierLedgerRef = _firestore
+              .collection('financial_transactions')
+              .doc();
+
+          trx.set(supplierLedgerRef, {
+            'id': supplierLedgerRef.id,
+            'type': 'supplier_credit',
+            'accountType': 'supplier',
+            'pharmacyId': order.pharmacyId,
+            'companyId': order.companyId,
+            'orderId': order.id,
+            'amount': order.totalPrice,
+            'createdAt': Timestamp.now(),
+            'note': 'مشتريات آجل للطلب #${order.id.substring(0, 8)}',
+          });
         }
+      });
 
-        // =====================================================
-        // Financial Ledger Transactions
-        // =====================================================
-
-        final customerLedgerRef = _firestore
-            .collection('financial_transactions')
-            .doc();
-
-        trx.set(customerLedgerRef, {
-          'id': customerLedgerRef.id,
-          'type': 'customer_credit',
-          'accountType': 'customer',
-          'pharmacyId': order.pharmacyId,
-          'companyId': order.companyId,
-          'orderId': order.id,
-          'amount': order.totalPrice,
-          'createdAt': Timestamp.now(),
-          'note':
-              'مبيعات آجل للطلب #${order.id.substring(0, 8)}',
-        });
-
-        final supplierLedgerRef = _firestore
-            .collection('financial_transactions')
-            .doc();
-
-        trx.set(supplierLedgerRef, {
-          'id': supplierLedgerRef.id,
-          'type': 'supplier_credit',
-          'accountType': 'supplier',
-          'pharmacyId': order.pharmacyId,
-          'companyId': order.companyId,
-          'orderId': order.id,
-          'amount': order.totalPrice,
-          'createdAt': Timestamp.now(),
-          'note':
-              'مشتريات آجل للطلب #${order.id.substring(0, 8)}',
-        });
+      // تحديث القائمة المحلية
+      final index = _orders.indexWhere((o) => o.id == orderId);
+      if (index != -1) {
+        final oldOrder = _orders[index];
+        _orders[index] = OrderModel(
+          id: oldOrder.id,
+          pharmacyId: oldOrder.pharmacyId,
+          pharmacyName: oldOrder.pharmacyName,
+          pharmacyCity: oldOrder.pharmacyCity,
+          regionId: oldOrder.regionId,
+          companyId: oldOrder.companyId,
+          companyName: oldOrder.companyName,
+          items: oldOrder.items,
+          totalPrice: oldOrder.totalPrice,
+          status: 'accepted',
+          date: oldOrder.date,
+          paymentType: oldOrder.paymentType,
+          paymentMethod: oldOrder.paymentMethod,
+          creditDays: oldOrder.creditDays,
+          rejectionReason: oldOrder.rejectionReason,
+          createdBy: oldOrder.createdBy,
+          assignedTo: oldOrder.assignedTo,
+          branchId: oldOrder.branchId,
+        );
+        notifyListeners();
       }
-    });
-
-    // تحديث القائمة المحلية
-
-    final index = _orders.indexWhere((o) => o.id == orderId);
-
-    if (index != -1) {
-
-      final oldOrder = _orders[index];
-
-      _orders[index] = OrderModel(
-        id: oldOrder.id,
-        pharmacyId: oldOrder.pharmacyId,
-        pharmacyName: oldOrder.pharmacyName,
-        pharmacyCity: oldOrder.pharmacyCity,
-        regionId: oldOrder.regionId,
-        companyId: oldOrder.companyId,
-        companyName: oldOrder.companyName,
-        items: oldOrder.items,
-        totalPrice: oldOrder.totalPrice,
-        status: 'accepted',
-        date: oldOrder.date,
-        paymentType: oldOrder.paymentType,
-        paymentMethod: oldOrder.paymentMethod,
-        creditDays: oldOrder.creditDays,
-        rejectionReason: oldOrder.rejectionReason,
-        createdBy: oldOrder.createdBy,
-        assignedTo: oldOrder.assignedTo,
-        branchId: oldOrder.branchId,
-      );
-
-      notifyListeners();
+    } catch (e) {
+      debugPrint('acceptOrder error: $e');
+      rethrow;
     }
-
-  } catch (e) {
-    debugPrint('acceptOrder error: $e');
-    rethrow;
   }
-}
 
-  Future<void> rejectOrder(String orderId, String? rejectionReason, AccountProvider? accountProvider) async {
+  Future<void> rejectOrder(String orderId, String? rejectionReason,
+      AccountProvider? accountProvider) async {
     final docRef = _firestore.collection('orders').doc(orderId);
     await docRef.update({
       'status': 'rejected',
@@ -350,43 +243,42 @@ class OrderProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
-    
-    // أضف هذه الدالة داخل كلاس OrderProvider
 
-Future<void> updateOrderItems(String orderId, List<OrderItem> newItems, double newTotal) async {
-  final docRef = _firestore.collection('orders').doc(orderId);
-  await docRef.update({
-    'items': newItems.map((i) => i.toMap()).toList(),
-    'totalPrice': newTotal,
-  });
-  // تحديث القائمة المحلية
-  final index = _orders.indexWhere((o) => o.id == orderId);
-  if (index != -1) {
-    _orders[index] = OrderModel(
-      id: _orders[index].id,
-      pharmacyId: _orders[index].pharmacyId,
-      pharmacyName: _orders[index].pharmacyName,
-      pharmacyCity: _orders[index].pharmacyCity,
-      regionId: _orders[index].regionId,
-      companyId: _orders[index].companyId,
-      companyName: _orders[index].companyName,
-      items: newItems,
-      totalPrice: newTotal,
-      status: _orders[index].status, // يبقى pending
-      date: _orders[index].date,
-      paymentType: _orders[index].paymentType,
-      paymentMethod: _orders[index].paymentMethod,
-      creditDays: _orders[index].creditDays,
-      rejectionReason: _orders[index].rejectionReason,
-      createdBy: _orders[index].createdBy,
-      assignedTo: _orders[index].assignedTo,
-      branchId: _orders[index].branchId,
-    );
-    notifyListeners();
+  Future<void> updateOrderItems(
+      String orderId, List<OrderItem> newItems, double newTotal) async {
+    final docRef = _firestore.collection('orders').doc(orderId);
+    await docRef.update({
+      'items': newItems.map((i) => i.toMap()).toList(),
+      'totalPrice': newTotal,
+    });
+    final index = _orders.indexWhere((o) => o.id == orderId);
+    if (index != -1) {
+      _orders[index] = OrderModel(
+        id: _orders[index].id,
+        pharmacyId: _orders[index].pharmacyId,
+        pharmacyName: _orders[index].pharmacyName,
+        pharmacyCity: _orders[index].pharmacyCity,
+        regionId: _orders[index].regionId,
+        companyId: _orders[index].companyId,
+        companyName: _orders[index].companyName,
+        items: newItems,
+        totalPrice: newTotal,
+        status: _orders[index].status,
+        date: _orders[index].date,
+        paymentType: _orders[index].paymentType,
+        paymentMethod: _orders[index].paymentMethod,
+        creditDays: _orders[index].creditDays,
+        rejectionReason: _orders[index].rejectionReason,
+        createdBy: _orders[index].createdBy,
+        assignedTo: _orders[index].assignedTo,
+        branchId: _orders[index].branchId,
+      );
+      notifyListeners();
+    }
   }
-}
 
-  Future<void> updateOrderStatus(String orderId, String newStatus, {String? rejectionReason}) async {
+  Future<void> updateOrderStatus(String orderId, String newStatus,
+      {String? rejectionReason}) async {
     final docRef = _firestore.collection('orders').doc(orderId);
     await docRef.update({'status': newStatus});
     final index = _orders.indexWhere((o) => o.id == orderId);
@@ -415,23 +307,38 @@ Future<void> updateOrderItems(String orderId, List<OrderItem> newItems, double n
     }
   }
 
-  Future<List<OrderModel>> getOrdersForCompany(String companyId, {String? branchId}) async {
-    Query query = _firestore.collection('orders').where('companyId', isEqualTo: companyId);
+  Future<List<OrderModel>> getOrdersForCompany(String companyId,
+      {String? branchId}) async {
+    Query query = _firestore
+        .collection('orders')
+        .where('companyId', isEqualTo: companyId);
     if (branchId != null && branchId.isNotEmpty) {
       query = query.where('branchId', isEqualTo: branchId);
     }
     final snapshot = await query.get();
-    return snapshot.docs.map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>)).toList();
+    return snapshot.docs
+        .map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<OrderModel>> getOrdersForPharmacy(String pharmacyId) async {
-    final snapshot = await _firestore.collection('orders').where('pharmacyId', isEqualTo: pharmacyId).get();
-    return snapshot.docs.map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>)).toList();
+    final snapshot = await _firestore
+        .collection('orders')
+        .where('pharmacyId', isEqualTo: pharmacyId)
+        .get();
+    return snapshot.docs
+        .map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<OrderModel>> getOrdersForBranch(String branchId) async {
-    final snapshot = await _firestore.collection('orders').where('branchId', isEqualTo: branchId).get();
-    return snapshot.docs.map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>)).toList();
+    final snapshot = await _firestore
+        .collection('orders')
+        .where('branchId', isEqualTo: branchId)
+        .get();
+    return snapshot.docs
+        .map((doc) => OrderModel.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+        .toList();
   }
 
   void clearOrders() {

@@ -15,6 +15,7 @@ class SuppliersScreen extends StatefulWidget {
 class _SuppliersScreenState extends State<SuppliersScreen> {
   List<SupplierAccount> _suppliers = [];
   bool _isLoading = true;
+  Map<String, double> _balances = {};
 
   @override
   void initState() {
@@ -35,8 +36,18 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     final accountProvider = Provider.of<AccountProvider>(context, listen: false);
     await accountProvider.loadSuppliersForPharmacy(pharmacyId);
     
+    final suppliers = accountProvider.suppliers;
+    
+    // جلب الأرصدة لكل مورد
+    final Map<String, double> tempBalances = {};
+    for (var supplier in suppliers) {
+      final balance = await accountProvider.getAccountBalance(supplier.id);
+      tempBalances[supplier.id] = balance;
+    }
+    
     setState(() {
-      _suppliers = accountProvider.suppliers;
+      _suppliers = suppliers;
+      _balances = tempBalances;
       _isLoading = false;
     });
   }
@@ -48,6 +59,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
   void _makePayment(SupplierAccount supplier) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
+    
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -73,16 +85,18 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount <= 0) return;
               
-              final transaction = LedgerTransaction(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                amount: amount,
-                date: DateTime.now(),
-                note: noteController.text.trim(),
-                type: 'payment',
-              );
+              final accountProvider = Provider.of<AccountProvider>(context, listen: false);
               
-              await Provider.of<AccountProvider>(context, listen: false)
-                  .addSupplierTransaction(supplier.id, transaction);
+              // استخدام createOrderLedgerEntry للتسديد
+              await accountProvider.createOrderLedgerEntry(
+                orderId: DateTime.now().millisecondsSinceEpoch.toString(),
+                accountId: supplier.id,
+                accountType: 'supplier',
+                amount: amount,
+                direction: 'payment',
+                companyId: supplier.companyId,
+                pharmacyId: supplier.pharmacyId,
+              );
               
               Navigator.pop(ctx);
               _refresh();
@@ -99,10 +113,19 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
+    
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('حسابات الموردين'), backgroundColor: Colors.teal),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (auth.currentUserType != 'pharmacy') {
+      return Scaffold(
+        appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
+        body: const Center(child: Text('هذه الصفحة مخصصة للصيدليات فقط')),
       );
     }
     
@@ -117,14 +140,16 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                 itemCount: _suppliers.length,
                 itemBuilder: (context, index) {
                   final supplier = _suppliers[index];
+                  final balance = _balances[supplier.id] ?? 0;
+                  
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ExpansionTile(
                       title: Text(supplier.companyName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('الرصيد: ${supplier.balance.toStringAsFixed(2)}'),
+                      subtitle: Text('الرصيد: ${balance.toStringAsFixed(2)}'),
                       leading: CircleAvatar(
-                        backgroundColor: supplier.balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
-                        child: Text('${supplier.balance.toStringAsFixed(0)}'),
+                        backgroundColor: balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
+                        child: Text('${balance.toStringAsFixed(0)}'),
                       ),
                       children: [
                         Padding(
@@ -162,21 +187,6 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
                               const SizedBox(height: 8),
                               const Text('ملاحظة: الرصيد الموجب يعني دين عليك للمورد',
                                 style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              const SizedBox(height: 12),
-                              const Text('سجل المعاملات:', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: supplier.transactions.length,
-                                itemBuilder: (ctx, idx) {
-                                  final t = supplier.transactions[idx];
-                                  return ListTile(
-                                    title: Text('${t.type == 'payment' ? 'سداد' : 'مشتريات'}: ${t.amount.toStringAsFixed(2)}'),
-                                    subtitle: Text(t.note),
-                                    trailing: Text(_formatDate(t.date)),
-                                  );
-                                },
-                              ),
                             ],
                           ),
                         ),
@@ -188,6 +198,4 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
       ),
     );
   }
-
-  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
 }

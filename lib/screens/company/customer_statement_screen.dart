@@ -1,37 +1,78 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/account_model.dart';
+import '../../providers/account_provider.dart';
 
-class CustomerStatementScreen extends StatelessWidget {
+class CustomerStatementScreen extends StatefulWidget {
   final CustomerAccount customer;
 
   const CustomerStatementScreen({Key? key, required this.customer}) : super(key: key);
 
   @override
+  State<CustomerStatementScreen> createState() => _CustomerStatementScreenState();
+}
+
+class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
+  List<LedgerTransaction> _transactions = [];
+  double _currentBalance = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    
+    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
+    
+    // جلب المعاملات من ledger_transactions
+    final transactions = await accountProvider.getAccountTransactions(widget.customer.id);
+    
+    // جلب الرصيد الحالي
+    final balance = await accountProvider.getAccountBalance(widget.customer.id);
+    
+    setState(() {
+      _transactions = transactions;
+      _currentBalance = balance;
+      _isLoading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final transactions = List<LedgerTransaction>.from(customer.transactions)
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('كشف حساب ${widget.customer.pharmacyName}'),
+          centerTitle: true,
+          backgroundColor: Colors.teal,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // ترتيب المعاملات من الأقدم إلى الأحدث لعرض كشف الحساب
+    final sortedTransactions = List<LedgerTransaction>.from(_transactions)
       ..sort((a, b) => a.date.compareTo(b.date));
 
     double runningBalance = 0;
     List<Map<String, dynamic>> statementRows = [];
 
-    for (var t in transactions) {
-      double debit = 0;
-      double credit = 0;
+    for (var t in sortedTransactions) {
+      double debit = 0;  // مدين (ما عليه)
+      double credit = 0; // دائن (ما دفعه)
+      
       if (t.type == 'purchase') {
         debit = t.amount;
         runningBalance += t.amount;
       } else if (t.type == 'payment') {
         credit = t.amount;
         runningBalance -= t.amount;
-      } else {
-        if (t.amount > 0) {
-          debit = t.amount;
-          runningBalance += t.amount;
-        } else {
-          credit = -t.amount;
-          runningBalance -= -t.amount;
-        }
       }
+
       statementRows.add({
         'date': t.date,
         'note': t.note,
@@ -41,29 +82,39 @@ class CustomerStatementScreen extends StatelessWidget {
       });
     }
 
+    // حساب إجمالي المشتريات والمدفوعات
+    final totalPurchases = _transactions
+        .where((t) => t.type == 'purchase')
+        .fold(0.0, (sum, t) => sum + t.amount);
+    
+    final totalPayments = _transactions
+        .where((t) => t.type == 'payment')
+        .fold(0.0, (sum, t) => sum + t.amount);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('كشف حساب ${customer.pharmacyName}'),
+        title: Text('كشف حساب ${widget.customer.pharmacyName}'),
         centerTitle: true,
         backgroundColor: Colors.teal,
       ),
       body: Column(
         children: [
+          // بطاقة الملخص
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.teal.shade50,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _infoCard('إجمالي المشتريات',
-                    customer.transactions.where((t) => t.type == 'purchase').fold(0.0, (s, t) => s + t.amount).toStringAsFixed(2)),
-                _infoCard('إجمالي المدفوعات',
-                    customer.transactions.where((t) => t.type == 'payment').fold(0.0, (s, t) => s + t.amount).toStringAsFixed(2)),
-                _infoCard('الرصيد الحالي', customer.balance.toStringAsFixed(2)),
+                _infoCard('إجمالي المشتريات', totalPurchases.toStringAsFixed(2)),
+                _infoCard('إجمالي المدفوعات', totalPayments.toStringAsFixed(2)),
+                _infoCard('الرصيد الحالي', _currentBalance.toStringAsFixed(2)),
               ],
             ),
           ),
           const SizedBox(height: 12),
+          
+          // جدول كشف الحساب
           Expanded(
             child: statementRows.isEmpty
                 ? const Center(child: Text('لا توجد معاملات'))
@@ -81,9 +132,9 @@ class CustomerStatementScreen extends StatelessWidget {
                       rows: statementRows.map((row) {
                         return DataRow(cells: [
                           DataCell(Text(_formatDate(row['date'] as DateTime))),
-                          DataCell(SizedBox(width: 150, child: Text(row['note'] as String))),
-                          DataCell(Text(((row['debit'] as double) > 0 ? (row['debit'] as double).toStringAsFixed(2) : '--'))),
-                          DataCell(Text(((row['credit'] as double) > 0 ? (row['credit'] as double).toStringAsFixed(2) : '--'))),
+                          DataCell(SizedBox(width: 200, child: Text(row['note'] as String))),
+                          DataCell(Text((row['debit'] as double) > 0 ? (row['debit'] as double).toStringAsFixed(2) : '--')),
+                          DataCell(Text((row['credit'] as double) > 0 ? (row['credit'] as double).toStringAsFixed(2) : '--')),
                           DataCell(Text((row['balance'] as double).toStringAsFixed(2))),
                         ]);
                       }).toList(),

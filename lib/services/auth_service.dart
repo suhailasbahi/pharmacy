@@ -13,63 +13,84 @@ class AuthService extends ChangeNotifier {
   String? _currentUserType;
   String? _currentCompanyId;
   String? _currentPharmacyName;
-     String? _currentPharmacyId;
+  String? _currentPharmacyId;
   String? _currentRegionId;
   bool _isLoggedIn = false;
   bool _isGuest = false;
   String? _currentRoleId;
   List<String> _currentPermissions = [];
-  String? _currentBranchId;
   List<String> _currentCustomPermissions = [];
+  String? _currentBranchId;
   String? _currentCompanyName;
 
   String? get currentUserId => _currentUserModel?.id;
   String? get currentUserType => _currentUserType;
-  String? get currentCompanyName => _currentUserModel?.name;
+  String? get currentCompanyName => _currentCompanyName;
   String? get currentCompanyId => _currentCompanyId;
   String? get currentPharmacyName => _currentPharmacyName;
-    String? get currentPharmacyId => _currentPharmacyId;
+  String? get currentPharmacyId => _currentPharmacyId;
   String? get currentRegionId => _currentRegionId;
   bool get isLoggedIn => _isLoggedIn;
   bool get isGuest => _isGuest;
   String? get currentRoleId => _currentRoleId;
   String? get currentBranchId => _currentBranchId;
   bool get isCompanyOwner => _currentUserType == 'company';
+  bool get isPharmacy => _currentUserType == 'pharmacy';
+  bool get isSubAccount => _currentUserType == 'sub_account';
 
-  // ========== الصلاحيات (مؤقتة، ستُقرأ من Firestore لاحقاً) ==========
-  List<String> get permissions => isCompanyOwner ? allPermissions : [];
-  bool hasPermission(String permission) => isCompanyOwner;
-  bool get canViewAllProducts => isCompanyOwner;
-  bool get canViewOwnProducts => false;
-  bool get canAddProduct => isCompanyOwner;
-  bool get canEditProduct => isCompanyOwner;
-  bool get canDeleteProduct => isCompanyOwner;
-  bool get canViewAllOrders => isCompanyOwner;
-  bool get canViewOwnOrders => false;
-  bool get canAcceptOrder => isCompanyOwner;
-  bool get canRejectOrder => isCompanyOwner;
-  bool get canShipOrder => isCompanyOwner;
-  bool get canDeliverOrder => isCompanyOwner;
-  bool get canViewAllCustomers => isCompanyOwner;
-  bool get canViewOwnCustomers => false;
-  bool get canAddCustomer => isCompanyOwner;
-  bool get canEditCustomer => isCompanyOwner;
-  bool get canDeleteCustomer => isCompanyOwner;
-  bool get canViewFinancialReports => isCompanyOwner;
-  bool get canViewSalesReports => isCompanyOwner;
-  bool get canViewInventoryReports => isCompanyOwner;
-  bool get canViewAllReports => isCompanyOwner;
-  bool get canManageUsers => isCompanyOwner;
-  bool get canManageBranches => isCompanyOwner;
-  bool get canManageRoles => isCompanyOwner;
-  bool get canViewInventory => isCompanyOwner;
-  bool get canAdjustInventory => isCompanyOwner;
+  // ========== دالة مساعدة للتحقق من الصلاحية ==========
+  bool hasPermission(String permission) {
+    if (isGuest) return false;
+    if (isCompanyOwner) return true;
+    
+    // التحقق من الصلاحيات المخصصة أولاً
+    if (_currentCustomPermissions.contains(permission)) return true;
+    
+    // ثم التحقق من صلاحيات الدور
+    return _currentPermissions.contains(permission);
+  }
+
+  // ========== صلاحيات المنتجات ==========
+  bool get canViewAllProducts => hasPermission('products:view_all');
+  bool get canViewOwnProducts => hasPermission('products:view_own');
+  bool get canAddProduct => hasPermission('products:add');
+  bool get canEditProduct => hasPermission('products:edit');
+  bool get canDeleteProduct => hasPermission('products:delete');
+
+  // ========== صلاحيات الطلبات ==========
+  bool get canViewAllOrders => hasPermission('orders:view_all');
+  bool get canViewOwnOrders => hasPermission('orders:view_own');
+  bool get canAcceptOrder => hasPermission('orders:accept');
+  bool get canRejectOrder => hasPermission('orders:reject');
+  bool get canShipOrder => hasPermission('orders:ship');
+  bool get canDeliverOrder => hasPermission('orders:deliver');
+
+  // ========== صلاحيات العملاء ==========
+  bool get canViewAllCustomers => hasPermission('customers:view_all');
+  bool get canViewOwnCustomers => hasPermission('customers:view_own');
+  bool get canAddCustomer => hasPermission('customers:add');
+  bool get canEditCustomer => hasPermission('customers:edit');
+  bool get canDeleteCustomer => hasPermission('customers:delete');
+
+  // ========== صلاحيات التقارير ==========
+  bool get canViewFinancialReports => hasPermission('reports:view_financial');
+  bool get canViewSalesReports => hasPermission('reports:view_sales');
+  bool get canViewInventoryReports => hasPermission('reports:view_inventory');
+  bool get canViewAllReports => hasPermission('reports:view_all');
+
+  // ========== صلاحيات الإدارة ==========
+  bool get canManageUsers => hasPermission('users:manage');
+  bool get canManageBranches => hasPermission('branches:manage');
+  bool get canManageRoles => hasPermission('roles:manage');
+
+  // ========== صلاحيات المخزون ==========
+  bool get canViewInventory => hasPermission('inventory:view');
+  bool get canAdjustInventory => hasPermission('inventory:adjust');
 
   // ========== دوال الفرع والمناطق ==========
   bool get isBranchManager => _currentRoleId == 'role_branch_manager' && _currentBranchId != null;
   String? getEffectiveBranchId() => isBranchManager ? _currentBranchId : null;
 
-  // المناطق المسموحة للمستخدم (إذا كان مدير فرع أو مندوب)
   List<String> getEffectiveRegions() {
     if (isCompanyOwner) {
       return Region.allRegions.map((r) => r.id).toList();
@@ -96,120 +117,107 @@ class AuthService extends ChangeNotifier {
 
   // ========== تسجيل الدخول ==========
   Future<void> login(String email, String password) async {
-  try {
-    print('1. Attempting sign in...');
-    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    String uid = userCredential.user!.uid;
-    print('2. Signed in with UID: $uid');
+    try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      String uid = userCredential.user!.uid;
 
-    print('3. Fetching user document from Firestore...');
-    DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
-    print('4. Document exists: ${doc.exists}');
-    
-    if (!doc.exists) {
-      print('❌ Document not found for UID: $uid');
-      throw Exception('المستخدم غير موجود في قاعدة البيانات');
-    }
-    
-    print('5. Converting document data...');
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    print('6. Data keys: ${data.keys}');
-    
-    if (data['isDeleted'] == true) {
-      throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
-    }
+      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
 
-    print('7. Creating UserModel from data...');
-    _currentUserModel = UserModel.fromMap(uid, data);
-    print('8. UserModel created successfully');
-    
-    _currentUserType = _currentUserModel!.userType;
-    _currentCompanyId = _currentUserModel!.companyId;
-    _currentPharmacyName = _currentUserModel!.name;
+      if (!doc.exists) {
+        throw Exception('المستخدم غير موجود في قاعدة البيانات');
+      }
+
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+      if (data['isDeleted'] == true) {
+        throw Exception('هذا الحساب محذوف. يرجى التواصل مع الدعم.');
+      }
+
+      _currentUserModel = UserModel.fromMap(uid, data);
+      _currentUserType = _currentUserModel!.userType;
+      _currentCompanyId = _currentUserModel!.companyId;
+      _currentPharmacyName = _currentUserModel!.name;
       _currentPharmacyId = _currentUserModel!.id;
-    _currentRegionId = _currentUserModel!.regionId ?? 'sanaa';
-    _currentRoleId = _currentUserModel!.roleId;
-    _currentPermissions = await _getRolePermissions(_currentRoleId!);
-    _currentCustomPermissions = _currentUserModel!.customPermissions;
-    _currentBranchId = _currentUserModel!.branchId;
-    _currentCompanyName = _currentUserModel!.name;
-    _isLoggedIn = true;
-    _isGuest = false;
-    
-    print('9. Login completed successfully!');
-    notifyListeners();
-  } catch (e, stackTrace) {
-    print('❌ Login error: $e');
-    print(stackTrace);
-    throw Exception('فشل تسجيل الدخول: ${e.toString()}');
+      _currentRegionId = _currentUserModel!.regionId ?? 'sanaa';
+      _currentRoleId = _currentUserModel!.roleId;
+      _currentCustomPermissions = _currentUserModel!.customPermissions;
+      _currentBranchId = _currentUserModel!.branchId;
+      _currentCompanyName = _currentUserModel!.name;
+      
+      // تحميل صلاحيات الدور
+      _currentPermissions = await _getRolePermissions(_currentRoleId!);
+      
+      _isLoggedIn = true;
+      _isGuest = false;
+
+      notifyListeners();
+    } catch (e) {
+      throw Exception('فشل تسجيل الدخول: ${e.toString()}');
+    }
   }
-}
+
   // ========== إنشاء حساب جديد ==========
   Future<void> register({
-  required String email,
-  required String password,
-  required String name,
-  required String phone,
-  required String userType,
-  required String licenseNumber,
-  required String regionId,
-  String? address,
-}) async {
-  try {
-    UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    String uid = userCredential.user!.uid;
-    
-    // ===== تعيين المعرفات حسب نوع المستخدم =====
-    String? companyId;
-    String? pharmacyId;
-    
-    if (userType == 'company') {
-      // الشركة: companyId = uid (نفس معرف المستخدم)
-      companyId = uid;
-      pharmacyId = null;
-    } else if (userType == 'pharmacy') {
-      // الصيدلية: pharmacyId = uid
-      companyId = null;
-      pharmacyId = uid;
-    } else {
-      // حساب فرعي: سيتم تعيينه لاحقاً من parentCompanyId
-      companyId = null;
-      pharmacyId = null;
+    required String email,
+    required String password,
+    required String name,
+    required String phone,
+    required String userType,
+    required String licenseNumber,
+    required String regionId,
+    String? address,
+  }) async {
+    try {
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      String uid = userCredential.user!.uid;
+
+      String? companyId;
+      String? pharmacyId;
+
+      if (userType == 'company') {
+        companyId = uid;
+        pharmacyId = null;
+      } else if (userType == 'pharmacy') {
+        companyId = null;
+        pharmacyId = uid;
+      } else {
+        companyId = null;
+        pharmacyId = null;
+      }
+
+      UserModel newUser = UserModel(
+        id: uid,
+        email: email,
+        name: name,
+        phone: phone,
+        userType: userType,
+        parentCompanyId: null,
+        branchId: null,
+        roleId: userType == 'company' ? 'role_owner' : 'role_pharmacy_owner',
+        customPermissions: [],
+        isActive: true,
+        createdAt: DateTime.now(),
+        licenseNumber: licenseNumber,
+        isApproved: userType == 'pharmacy' ? false : true,
+        address: address ?? '',
+        companyId: companyId,
+        pharmacyId: pharmacyId,
+        regionId: regionId,
+        assignedRegions: userType == 'company' ? Region.allRegions.map((r) => r.id).toList() : [],
+      );
+
+      await _firestore.collection('users').doc(uid).set(newUser.toMap());
+      await login(email, password);
+    } catch (e) {
+      throw Exception('فشل إنشاء الحساب: ${e.toString()}');
     }
-    
-    UserModel newUser = UserModel(
-      id: uid,
-      email: email,
-      name: name,
-      phone: phone,
-      userType: userType,
-      parentCompanyId: null,
-      branchId: null,
-      roleId: userType == 'company' ? 'role_owner' : 'role_pharmacy_owner',
-      customPermissions: [],
-      isActive: true,
-      createdAt: DateTime.now(),
-      licenseNumber: licenseNumber,
-      isApproved: userType == 'pharmacy' ? false : true,
-      address: address ?? '',
-      companyId: companyId,     // 🔥 هنا كان العيب
-      pharmacyId: pharmacyId,   // 🔥 هنا كان العيب
-      regionId: regionId,
-      assignedRegions: userType == 'company' ? Region.allRegions.map((r) => r.id).toList() : [],
-    );
-    
-    await _firestore.collection('users').doc(uid).set(newUser.toMap());
-    await login(email, password);
-  } catch (e) {
-    throw Exception('فشل إنشاء الحساب: ${e.toString()}');
   }
-}
 
   // ========== تسجيل الخروج ==========
   Future<void> logout() async {
@@ -229,7 +237,7 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ========== مساعدة ==========
+  // ========== جلب صلاحيات الدور من Firestore ==========
   Future<List<String>> _getRolePermissions(String roleId) async {
     try {
       DocumentSnapshot roleDoc = await _firestore.collection('roles').doc(roleId).get();
@@ -237,7 +245,9 @@ class AuthService extends ChangeNotifier {
         Map<String, dynamic> data = roleDoc.data() as Map<String, dynamic>;
         return List<String>.from(data['defaultPermissions'] ?? []);
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Error loading role permissions: $e');
+    }
     return [];
   }
 }

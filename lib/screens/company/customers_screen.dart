@@ -1,9 +1,9 @@
- import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/account_model.dart';
-import 'customer_statement_screen.dart'; // أضف هذا الـ import
+import 'customer_statement_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({Key? key}) : super(key: key);
@@ -15,6 +15,7 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> {
   List<CustomerAccount> _customers = [];
   bool _isLoading = true;
+  Map<String, double> _balances = {};
 
   @override
   void initState() {
@@ -35,8 +36,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final accountProvider = Provider.of<AccountProvider>(context, listen: false);
     await accountProvider.loadCustomersForCompany(companyId);
     
+    final customers = accountProvider.customers;
+    
+    // جلب الأرصدة لكل عميل
+    final Map<String, double> tempBalances = {};
+    for (var customer in customers) {
+      final balance = await accountProvider.getAccountBalance(customer.id);
+      tempBalances[customer.id] = balance;
+    }
+    
     setState(() {
-      _customers = accountProvider.customers;
+      _customers = customers;
+      _balances = tempBalances;
       _isLoading = false;
     });
   }
@@ -48,6 +59,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   void _receivePayment(CustomerAccount customer) {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
+    
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -73,16 +85,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
               final amount = double.tryParse(amountController.text) ?? 0;
               if (amount <= 0) return;
               
-              final transaction = LedgerTransaction(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                amount: amount,
-                date: DateTime.now(),
-                note: noteController.text.trim(),
-                type: 'payment',
-              );
+              final accountProvider = Provider.of<AccountProvider>(context, listen: false);
               
-              await Provider.of<AccountProvider>(context, listen: false)
-                  .addCustomerTransaction(customer.id, transaction);
+              // استخدام createOrderLedgerEntry للتسديد
+              await accountProvider.createOrderLedgerEntry(
+                orderId: DateTime.now().millisecondsSinceEpoch.toString(),
+                accountId: customer.id,
+                accountType: 'customer',
+                amount: amount,
+                direction: 'payment',
+                companyId: customer.companyId,
+                pharmacyId: customer.pharmacyId,
+              );
               
               Navigator.pop(ctx);
               _refresh();
@@ -99,10 +113,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthService>(context);
+    
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('حسابات العملاء'), backgroundColor: Colors.teal),
         body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (auth.currentUserType != 'company') {
+      return Scaffold(
+        appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
+        body: const Center(child: Text('هذه الصفحة مخصصة للشركات فقط')),
       );
     }
     
@@ -117,14 +140,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 itemCount: _customers.length,
                 itemBuilder: (context, index) {
                   final customer = _customers[index];
+                  final balance = _balances[customer.id] ?? 0;
+                  
                   return Card(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ExpansionTile(
                       title: Text(customer.pharmacyName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('الرصيد: ${customer.balance.toStringAsFixed(2)}'),
+                      subtitle: Text('الرصيد: ${balance.toStringAsFixed(2)}'),
                       leading: CircleAvatar(
-                        backgroundColor: customer.balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
-                        child: Text('${customer.balance.toStringAsFixed(0)}'),
+                        backgroundColor: balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
+                        child: Text('${balance.toStringAsFixed(0)}'),
                       ),
                       children: [
                         Padding(
@@ -138,7 +163,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 children: [
-                                  // زر كشف حساب - الجديد
                                   ElevatedButton.icon(
                                     onPressed: () {
                                       Navigator.push(
@@ -152,31 +176,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                     label: const Text('كشف حساب'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                                   ),
-                                  // زر استلام دفعة
                                   ElevatedButton.icon(
                                     onPressed: () => _receivePayment(customer),
                                     icon: const Icon(Icons.payment),
                                     label: const Text('استلام دفعة'),
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                                   ),
-                                  const Text('ملاحظة: الرصيد الموجب يعني دين على العميل'),
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              const Text('سجل المعاملات:', style: TextStyle(fontWeight: FontWeight.bold)),
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: customer.transactions.length,
-                                itemBuilder: (ctx, idx) {
-                                  final t = customer.transactions[idx];
-                                  return ListTile(
-                                    title: Text('${t.type == 'payment' ? 'سداد' : 'مشتريات'}: ${t.amount.toStringAsFixed(2)}'),
-                                    subtitle: Text(t.note),
-                                    trailing: Text(_formatDate(t.date)),
-                                  );
-                                },
-                              ),
+                              const Text('ملاحظة: الرصيد الموجب يعني دين على العميل'),
                             ],
                           ),
                         ),
@@ -188,6 +197,4 @@ class _CustomersScreenState extends State<CustomersScreen> {
       ),
     );
   }
-
-  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
 }
