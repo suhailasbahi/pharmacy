@@ -11,6 +11,21 @@ import '../../models/region.dart';
 import '../../services/auth_service.dart';
 import '../../providers/product_provider.dart';
 
+// نموذج مجموعة الأسعار
+class _PriceGroup {
+  double price;
+  String currency;
+  double taxRate;
+  List<Region> regions;
+
+  _PriceGroup({
+    required this.price,
+    required this.currency,
+    required this.taxRate,
+    required this.regions,
+  });
+}
+
 class AddProductScreen extends StatefulWidget {
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -33,18 +48,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _pricePerPieceController = TextEditingController();
   final _pricePerCartonController = TextEditingController();
   final _piecesPerCartonController = TextEditingController();
-  List<RegionPricing> _regionPrices = [];
   BonusModel? _bonusCash;
   BonusModel? _bonusCredit;
   AgencyModel? _selectedAgency;
   List<AgencyModel> _agencies = [];
   final ImagePicker _picker = ImagePicker();
-  final List<Region> _regions = Region.allRegions;
+  
+  // ========== نظام تسعير المحافظات الجديد ==========
+  List<_PriceGroup> _priceGroups = [];
+  final List<Region> _allRegions = Region.allRegions;
 
   @override
   void initState() {
     super.initState();
-    _regionPrices = _regions.map((reg) => RegionPricing(regionId: reg.id, regionName: reg.name, price: 0, currency: 'yemen')).toList();
     _loadAgencies();
   }
 
@@ -98,13 +114,244 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _defaultUnit = 'piece';
       _bonusCash = null;
       _bonusCredit = null;
-      _regionPrices = _regions.map((reg) => RegionPricing(regionId: reg.id, regionName: reg.name, price: 0, currency: 'yemen')).toList();
+      _priceGroups = [];
     });
   }
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
+
+  // ========== دوال تسعير المحافظات الجديدة ==========
+  
+  List<Region> _getUnassignedRegions() {
+    final selectedRegionIds = _priceGroups
+        .expand((group) => group.regions.map((r) => r.id))
+        .toSet();
+    return _allRegions.where((region) => !selectedRegionIds.contains(region.id)).toList();
+  }
+
+  void _showAddPriceDialog() {
+    final priceController = TextEditingController();
+    final taxController = TextEditingController();
+    String selectedCurrency = 'yemen';
+    List<Region> selectedRegions = [];
+    List<Region> availableRegions = _getUnassignedRegions();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('إضافة سعر جديد'),
+            content: SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: priceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'السعر', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedCurrency,
+                    decoration: const InputDecoration(labelText: 'العملة', border: OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(value: 'yemen', child: Text('ريال يمني')),
+                      DropdownMenuItem(value: 'saudi', child: Text('ريال سعودي')),
+                      DropdownMenuItem(value: 'dollar', child: Text('دولار')),
+                    ],
+                    onChanged: (v) => setDialogState(() => selectedCurrency = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: taxController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'الضريبة (%)', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('اختر المحافظات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListView.builder(
+                      itemCount: availableRegions.length,
+                      itemBuilder: (_, i) {
+                        final region = availableRegions[i];
+                        final isSelected = selectedRegions.contains(region);
+                        return CheckboxListTile(
+                          title: Text(region.name),
+                          value: isSelected,
+                          onChanged: (val) {
+                            setDialogState(() {
+                              if (val == true) {
+                                selectedRegions.add(region);
+                              } else {
+                                selectedRegions.remove(region);
+                              }
+                            });
+                          },
+                          dense: true,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+              ElevatedButton(
+                onPressed: () {
+                  final price = double.tryParse(priceController.text) ?? 0;
+                  if (price <= 0) {
+                    _showSnackBar('يرجى إدخال سعر صحيح', Colors.orange);
+                    return;
+                  }
+                  if (selectedRegions.isEmpty) {
+                    _showSnackBar('يرجى اختيار محافظة واحدة على الأقل', Colors.orange);
+                    return;
+                  }
+                  setState(() {
+                    _priceGroups.add(_PriceGroup(
+                      price: price,
+                      currency: selectedCurrency,
+                      taxRate: double.tryParse(taxController.text) ?? 0,
+                      regions: selectedRegions,
+                    ));
+                  });
+                  Navigator.pop(ctx);
+                },
+                child: const Text('إضافة'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _removePriceGroup(int index) {
+    setState(() {
+      _priceGroups.removeAt(index);
+    });
+  }
+
+  List<RegionPricing> _convertToRegionPricing() {
+    final List<RegionPricing> result = [];
+    for (var group in _priceGroups) {
+      for (var region in group.regions) {
+        result.add(RegionPricing(
+          regionId: region.id,
+          regionName: region.name,
+          price: group.price,
+          currency: group.currency,
+          taxRate: group.taxRate,
+        ));
+      }
+    }
+    return result;
+  }
+
+  String _getCurrencySymbol(String currency) {
+    switch (currency) {
+      case 'yemen': return 'ر.ي';
+      case 'saudi': return 'ر.س';
+      case 'dollar': return '\$';
+      default: return 'ر.ي';
+    }
+  }
+
+  Widget _buildPriceGroupCard(_PriceGroup group, int index) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.grey.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${group.price.toStringAsFixed(2)} ${_getCurrencySymbol(group.currency)}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _removePriceGroup(index),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('ضريبة: ${group.taxRate}%', style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: group.regions.map((r) => Chip(label: Text(r.name))).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegionPricingSection() {
+    return Card(
+      child: ExpansionTile(
+        title: const Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
+        initiallyExpanded: true,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _showAddPriceDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('إضافة سعر جديد'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                ),
+                const SizedBox(height: 12),
+                ..._priceGroups.asMap().entries.map((entry) {
+                  return _buildPriceGroupCard(entry.value, entry.key);
+                }),
+                if (_priceGroups.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('لا توجد أسعار محددة', style: TextStyle(color: Colors.grey)),
+                  ),
+                if (_getUnassignedRegions().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '⚠️ محافظات غير مسعرة: ${_getUnassignedRegions().map((r) => r.name).join(', ')}',
+                        style: const TextStyle(color: Colors.orange, fontSize: 12),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ========== دوال إضافة المنتج ==========
 
   void _addProduct() async {
     if (!_formKey.currentState!.validate()) return;
@@ -116,6 +363,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _showSnackBar('يرجى اختيار الوكالة', Colors.orange);
       return;
     }
+    if (_priceGroups.isEmpty) {
+      _showSnackBar('يرجى إضافة تسعير للمناطق', Colors.orange);
+      return;
+    }
+    
     setState(() => _isLoading = true);
 
     try {
@@ -138,7 +390,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         expiryDate: _expiryDate!,
         isActive: true,
         createdAt: DateTime.now(),
-        regionPrices: _regionPrices,
+        regionPrices: _convertToRegionPricing(),
         bonusCash: _bonusCash,
         bonusCredit: _bonusCredit,
         pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
@@ -155,7 +407,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       await productProvider.addProduct(newProduct);
       _clearForm();
       _showSnackBar('تم إضافة المنتج بنجاح', Colors.green);
-      // لا نغلق الشاشة تلقائياً، يبقى المستخدم في نفس الشاشة
     } catch (e, stackTrace) {
       print("Error adding product: $e");
       print(stackTrace);
@@ -204,7 +455,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               const SizedBox(height: 16),
               _buildOfferSection(),
               const SizedBox(height: 16),
-              _buildRegionPricingTable(),
+              _buildRegionPricingSection(),  // تم الاستبدال
               const SizedBox(height: 16),
               _buildBonusesSection(),
               const SizedBox(height: 16),
@@ -220,7 +471,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // ===================== واجهات المستخدم (UI) =====================
+  // ========== واجهات المستخدم (UI) ==========
+  
   Widget _buildOfferSection() {
     return Card(
       child: ExpansionTile(
@@ -314,67 +566,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
           ),
         ),
       );
-
-  Widget _buildRegionPricingTable() {
-    return Card(
-      child: ExpansionTile(
-        title: const Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: const [DataColumn(label: Text('المنطقة')), DataColumn(label: Text('السعر')), DataColumn(label: Text('العملة')), DataColumn(label: Text('الضريبة %'))],
-              rows: _regionPrices.map((rp) {
-                int idx = _regionPrices.indexOf(rp);
-                return DataRow(cells: [
-                  DataCell(Text(rp.regionName)),
-                  DataCell(TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'السعر'),
-                    onChanged: (val) => setState(() {
-                      _regionPrices[idx] = RegionPricing(
-                        regionId: rp.regionId,
-                        regionName: rp.regionName,
-                        price: double.tryParse(val) ?? 0,
-                        currency: rp.currency,
-                        taxRate: rp.taxRate,
-                      );
-                    }),
-                  )),
-                  DataCell(DropdownButton<String>(
-                    value: rp.currency,
-                    items: const [DropdownMenuItem(value: 'yemen', child: Text('ريال يمني')), DropdownMenuItem(value: 'saudi', child: Text('ريال سعودي')), DropdownMenuItem(value: 'dollar', child: Text('دولار'))],
-                    onChanged: (val) => setState(() {
-                      _regionPrices[idx] = RegionPricing(
-                        regionId: rp.regionId,
-                        regionName: rp.regionName,
-                        price: rp.price,
-                        currency: val!,
-                        taxRate: rp.taxRate,
-                      );
-                    }),
-                  )),
-                  DataCell(TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: '%'),
-                    onChanged: (val) => setState(() {
-                      _regionPrices[idx] = RegionPricing(
-                        regionId: rp.regionId,
-                        regionName: rp.regionName,
-                        price: rp.price,
-                        currency: rp.currency,
-                        taxRate: double.tryParse(val) ?? 0,
-                      );
-                    }),
-                  )),
-                ]);
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildBonusesSection() => Card(
         child: ExpansionTile(

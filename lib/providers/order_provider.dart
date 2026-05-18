@@ -244,38 +244,47 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> updateOrderItems(
-      String orderId, List<OrderItem> newItems, double newTotal) async {
-    final docRef = _firestore.collection('orders').doc(orderId);
-    await docRef.update({
-      'items': newItems.map((i) => i.toMap()).toList(),
-      'totalPrice': newTotal,
-    });
-    final index = _orders.indexWhere((o) => o.id == orderId);
-    if (index != -1) {
-      _orders[index] = OrderModel(
-        id: _orders[index].id,
-        pharmacyId: _orders[index].pharmacyId,
-        pharmacyName: _orders[index].pharmacyName,
-        pharmacyCity: _orders[index].pharmacyCity,
-        regionId: _orders[index].regionId,
-        companyId: _orders[index].companyId,
-        companyName: _orders[index].companyName,
-        items: newItems,
-        totalPrice: newTotal,
-        status: _orders[index].status,
-        date: _orders[index].date,
-        paymentType: _orders[index].paymentType,
-        paymentMethod: _orders[index].paymentMethod,
-        creditDays: _orders[index].creditDays,
-        rejectionReason: _orders[index].rejectionReason,
-        createdBy: _orders[index].createdBy,
-        assignedTo: _orders[index].assignedTo,
-        branchId: _orders[index].branchId,
-      );
-      notifyListeners();
-    }
+ Future<void> updateOrderItems(String orderId, List<OrderItem> newItems, double newTotal) async {
+  // التحقق من أن الطلب لا يزال pending
+  final orderDoc = await _firestore.collection('orders').doc(orderId).get();
+  final order = OrderModel.fromMap(orderDoc.id, orderDoc.data() as Map<String, dynamic>);
+  
+  if (order.status != 'pending') {
+    throw Exception('لا يمكن تعديل طلب تمت معالجته بالفعل');
   }
+  
+  // التحديث
+  await _firestore.collection('orders').doc(orderId).update({
+    'items': newItems.map((i) => i.toMap()).toList(),
+    'totalPrice': newTotal,
+  });
+  
+  // تحديث القائمة المحلية
+  final index = _orders.indexWhere((o) => o.id == orderId);
+  if (index != -1) {
+    _orders[index] = OrderModel(
+      id: _orders[index].id,
+      pharmacyId: _orders[index].pharmacyId,
+      pharmacyName: _orders[index].pharmacyName,
+      pharmacyCity: _orders[index].pharmacyCity,
+      regionId: _orders[index].regionId,
+      companyId: _orders[index].companyId,
+      companyName: _orders[index].companyName,
+      items: newItems,
+      totalPrice: newTotal,
+      status: _orders[index].status,
+      date: _orders[index].date,
+      paymentType: _orders[index].paymentType,
+      paymentMethod: _orders[index].paymentMethod,
+      creditDays: _orders[index].creditDays,
+      rejectionReason: _orders[index].rejectionReason,
+      createdBy: _orders[index].createdBy,
+      assignedTo: _orders[index].assignedTo,
+      branchId: _orders[index].branchId,
+    );
+    notifyListeners();
+  }
+}
 
   Future<void> updateOrderStatus(String orderId, String newStatus,
       {String? rejectionReason}) async {

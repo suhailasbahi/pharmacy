@@ -1,4 +1,5 @@
-// حساب عميل (من وجهة نظر الشركة - الصيدليات التي تشتري منها)
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class CustomerAccount {
   final String id;
   final String pharmacyId;
@@ -6,21 +7,36 @@ class CustomerAccount {
   final String phone;
   final double balance;
   final DateTime createdAt;
-  final List<LedgerTransaction> transactions;
   final String? branchId;
-  final String companyId; // الشركة التي يتبع لها هذا العميل
+  final String companyId;
 
   CustomerAccount({
     required this.id,
     required this.pharmacyId,
     required this.pharmacyName,
     required this.phone,
-    this.balance = 0,
+    required this.balance,
     required this.createdAt,
-    this.transactions = const [],
     this.branchId,
     required this.companyId,
   });
+
+  factory CustomerAccount.fromMap(
+    String id,
+    Map<String, dynamic> map,
+  ) {
+    return CustomerAccount(
+      id: id,
+      pharmacyId: map['pharmacyId'] ?? '',
+      pharmacyName: map['pharmacyName'] ?? '',
+      phone: map['phone'] ?? '',
+      balance: (map['balance'] ?? 0).toDouble(),
+      createdAt:
+          (map['createdAt'] as Timestamp).toDate(),
+      branchId: map['branchId'],
+      companyId: map['companyId'] ?? '',
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -28,104 +44,100 @@ class CustomerAccount {
       'pharmacyName': pharmacyName,
       'phone': phone,
       'balance': balance,
-      'createdAt': createdAt.toIso8601String(),
-      'transactions': transactions.map((t) => t.toMap()).toList(),
+      'createdAt': Timestamp.fromDate(createdAt),
       'branchId': branchId,
       'companyId': companyId,
     };
   }
 
-  factory CustomerAccount.fromMap(String id, Map<String, dynamic> map) {
+  CustomerAccount copyWith({
+    String? id,
+    String? pharmacyId,
+    String? pharmacyName,
+    String? phone,
+    double? balance,
+    DateTime? createdAt,
+    String? branchId,
+    String? companyId,
+  }) {
     return CustomerAccount(
-      id: id,
-      pharmacyId: map['pharmacyId'] ?? '',
-      pharmacyName: map['pharmacyName'] ?? '',
-      phone: map['phone'] ?? '',
-      balance: (map['balance'] ?? 0).toDouble(),
-      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
-      transactions: (map['transactions'] as List?)?.map((t) => LedgerTransaction.fromMap(t)).toList() ?? [],
-      branchId: map['branchId'],
-      companyId: map['companyId'] ?? '',
-    );
-  }
-
-  CustomerAccount copyWith({double? balance, List<LedgerTransaction>? transactions}) {
-    return CustomerAccount(
-      id: id,
-      pharmacyId: pharmacyId,
-      pharmacyName: pharmacyName,
-      phone: phone,
+      id: id ?? this.id,
+      pharmacyId: pharmacyId ?? this.pharmacyId,
+      pharmacyName:
+          pharmacyName ?? this.pharmacyName,
+      phone: phone ?? this.phone,
       balance: balance ?? this.balance,
-      createdAt: createdAt,
-      transactions: transactions ?? this.transactions,
-      branchId: branchId,
-      companyId: companyId,
+      createdAt: createdAt ?? this.createdAt,
+      branchId: branchId ?? this.branchId,
+      companyId: companyId ?? this.companyId,
     );
   }
 }
 
-// حساب مورد (من وجهة نظر الصيدلية - الشركات التي تشتري منها)
 class SupplierAccount {
   final String id;
-  final String companyId;      // ID الشركة الموردة
-  final String companyName;    // اسم الشركة الموردة
+  final String companyId;
+  final String companyName;
   final String phone;
-  final String? email;
   final double balance;
   final DateTime createdAt;
-  final List<LedgerTransaction> transactions;
-  final String pharmacyId;     // الصيدلية التي يتبع لها هذا المورد
+  final String pharmacyId;
 
   SupplierAccount({
     required this.id,
     required this.companyId,
     required this.companyName,
     required this.phone,
-    this.email,
-    this.balance = 0,
+    required this.balance,
     required this.createdAt,
-    this.transactions = const [],
     required this.pharmacyId,
   });
+
+  factory SupplierAccount.fromMap(
+    String id,
+    Map<String, dynamic> map,
+  ) {
+    return SupplierAccount(
+      id: id,
+      companyId: map['companyId'] ?? '',
+      companyName: map['companyName'] ?? '',
+      phone: map['phone'] ?? '',
+      balance: (map['balance'] ?? 0).toDouble(),
+      createdAt:
+          (map['createdAt'] as Timestamp).toDate(),
+      pharmacyId: map['pharmacyId'] ?? '',
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
       'companyId': companyId,
       'companyName': companyName,
       'phone': phone,
-      'email': email,
       'balance': balance,
-      'createdAt': createdAt.toIso8601String(),
-      'transactions': transactions.map((t) => t.toMap()).toList(),
+      'createdAt': Timestamp.fromDate(createdAt),
       'pharmacyId': pharmacyId,
     };
   }
 
-  factory SupplierAccount.fromMap(String id, Map<String, dynamic> map) {
+  SupplierAccount copyWith({
+    String? id,
+    String? companyId,
+    String? companyName,
+    String? phone,
+    double? balance,
+    DateTime? createdAt,
+    String? pharmacyId,
+  }) {
     return SupplierAccount(
-      id: id,
-      companyId: map['companyId'] ?? '',
-      companyName: map['companyName'] ?? '',
-      phone: map['phone'] ?? '',
-      email: map['email'],
-      balance: (map['balance'] ?? 0).toDouble(),
-      createdAt: DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
-      transactions: (map['transactions'] as List?)?.map((t) => LedgerTransaction.fromMap(t)).toList() ?? [],
-      pharmacyId: map['pharmacyId'] ?? '',
-    );
-  }
-
-  SupplierAccount copyWith({double? balance, List<LedgerTransaction>? transactions}) {
-    return SupplierAccount(
-      id: id,
-      companyId: companyId,
-      companyName: companyName,
-      phone: phone,
-      email: email,
+      id: id ?? this.id,
+      companyId: companyId ?? this.companyId,
+      companyName:
+          companyName ?? this.companyName,
+      phone: phone ?? this.phone,
       balance: balance ?? this.balance,
-      createdAt: createdAt,
-      transactions: transactions ?? this.transactions,
-      pharmacyId: pharmacyId,
+      createdAt: createdAt ?? this.createdAt,
+      pharmacyId: pharmacyId ?? this.pharmacyId,
     );
   }
 }

@@ -77,7 +77,6 @@ class AccountProvider extends ChangeNotifier {
       phone: phone,
       balance: 0,
       createdAt: DateTime.now(),
-      transactions: [],
       branchId: branchId,
       companyId: companyId,
     );
@@ -158,7 +157,6 @@ class AccountProvider extends ChangeNotifier {
       phone: phone,
       balance: 0,
       createdAt: DateTime.now(),
-      transactions: [],
       pharmacyId: pharmacyId,
     );
 
