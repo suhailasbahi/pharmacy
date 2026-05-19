@@ -40,6 +40,7 @@ class _CompanyHomeScreenState extends State<CompanyHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
+      final companyId = auth.currentCompanyId?? '';
     return Scaffold(
       appBar: AppBar(
   title: Text(auth.currentCompanyName ?? 'لوحة الشركة'),
@@ -176,7 +177,14 @@ ListTile(
                 title: const Text('إدارة العملاء'),
                 onTap: () {
                   Navigator.pop(context);
-                  Navigator.push(context, MaterialPageRoute(builder: (_) =>  CustomersScreen()));
+                  Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => CustomersScreen(
+      companyId: companyId,
+    ),
+  ),
+);
                 },
               ),
             // ========== إدارة النظام (فقط للمالك أو من لديه الصلاحيات) ==========

@@ -325,23 +325,34 @@ class AccountProvider extends ChangeNotifier {
 
       return LedgerTransaction(
         id: doc.id,
-        amount: (data['amount'] ?? 0).toDouble(),
+
+        amount:
+            (data['amount'] ?? 0).toDouble(),
+
         date: date,
+
         note: data['note'] ?? '',
+
         type: type == 'debit'
             ? 'purchase'
             : 'payment',
+
+        orderId: data['orderId'],
       );
     }).toList();
 
-    // ترتيب محلي بدل Firestore index
-    transactions.sort((a, b) => b.date.compareTo(a.date));
+    transactions.sort(
+      (a, b) => a.date.compareTo(b.date),
+    );
 
     return transactions;
   } catch (e) {
-    debugPrint('getAccountTransactions error: $e');
+    debugPrint(
+      'getAccountTransactions error: $e',
+    );
+
     return [];
   }
+}
 
   }
-}

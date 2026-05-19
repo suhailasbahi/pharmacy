@@ -44,7 +44,10 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
     final title = widget.isGuest ? 'تصفح كزائر - ${widget.selectedCity}' : (auth.currentPharmacyName ?? 'صيدليتي') + ' - ${widget.selectedCity}';
-    
+      
+  
+final pharmacyId = auth.currentPharmacyId?? '';
+      
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -122,7 +125,14 @@ class _PharmacyHomeScreenState extends State<PharmacyHomeScreen> {
               title: const Text('إدارة الموردين'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SuppliersScreen()));
+                Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (_) => SuppliersScreen(
+      pharmacyId: pharmacyId,
+    ),
+  ),
+);
               },
             ),
             const Divider(),

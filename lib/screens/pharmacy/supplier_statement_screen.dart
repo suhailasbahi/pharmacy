@@ -1,21 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/account_model.dart';
 import '../../providers/account_provider.dart';
+import '../payments/add_payment_screen.dart';
 
 class SupplierStatementScreen extends StatefulWidget {
   final SupplierAccount supplier;
 
-  const SupplierStatementScreen({Key? key, required this.supplier}) : super(key: key);
+  const SupplierStatementScreen({
+    Key? key,
+    required this.supplier,
+  }) : super(key: key);
 
   @override
-  State<SupplierStatementScreen> createState() => _SupplierStatementScreenState();
+  State<SupplierStatementScreen> createState() =>
+      _SupplierStatementScreenState();
 }
 
-class _SupplierStatementScreenState extends State<SupplierStatementScreen> {
+class _SupplierStatementScreenState
+    extends State<SupplierStatementScreen> {
   List<LedgerTransaction> _transactions = [];
   double _currentBalance = 0;
+
   bool _isLoading = true;
+
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -24,73 +35,112 @@ class _SupplierStatementScreenState extends State<SupplierStatementScreen> {
   }
 
   Future<void> _loadData() async {
-  try {
     setState(() => _isLoading = true);
 
-    final accountProvider =
-        Provider.of<AccountProvider>(context, listen: false);
+    try {
+      final accountProvider =
+          Provider.of<AccountProvider>(context, listen: false);
 
-    final transactions =
-        await accountProvider.getAccountTransactions(
-      widget.supplier.id,
-    );
+      final transactions =
+          await accountProvider.getAccountTransactions(
+        widget.supplier.id,
+      );
 
-    final balance =
-        await accountProvider.getAccountBalance(
-      widget.supplier.id,
-    );
+      final balance =
+          await accountProvider.getAccountBalance(
+        widget.supplier.id,
+      );
 
-    if (!mounted) return;
+      setState(() {
+        _transactions = transactions;
+        _currentBalance = balance;
+      });
+    } catch (e) {
+      debugPrint('Supplier Statement Error: $e');
+    }
 
-    setState(() {
-      _transactions = transactions;
-      _currentBalance = balance;
-      _isLoading = false;
-    });
-  } catch (e) {
-    debugPrint('Statement load error: $e');
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
   }
-}
+
+  List<LedgerTransaction> get _filteredTransactions {
+    return _transactions.where((transaction) {
+      if (_startDate != null) {
+        if (transaction.date.isBefore(_startDate!)) {
+          return false;
+        }
+      }
+
+      if (_endDate != null) {
+        final end =
+            DateTime(
+              _endDate!.year,
+              _endDate!.month,
+              _endDate!.day,
+              23,
+              59,
+              59,
+            );
+
+        if (transaction.date.isAfter(end)) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+  }
+
+  Future<void> _pickStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() => _startDate = picked);
+    }
+  }
+
+  Future<void> _pickEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? DateTime.now(),
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() => _endDate = picked);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: Text('كشف حساب ${widget.supplier.companyName}'),
-          centerTitle: true,
-          backgroundColor: Colors.teal,
-        ),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+    final transactions = _filteredTransactions;
 
-    // ترتيب المعاملات من الأقدم إلى الأحدث لعرض كشف الحساب
-    final sortedTransactions = List<LedgerTransaction>.from(_transactions)
-      ..sort((a, b) => a.date.compareTo(b.date));
+    final sortedTransactions =
+        List<LedgerTransaction>.from(transactions)
+          ..sort((a, b) => a.date.compareTo(b.date));
 
     double runningBalance = 0;
-    List<Map<String, dynamic>> statementRows = [];
+
+    final rows = <Map<String, dynamic>>[];
 
     for (var t in sortedTransactions) {
-      double debit = 0;  // مدين (ما عليه)
-      double credit = 0; // دائن (ما دفعه)
-      
+      double debit = 0;
+      double credit = 0;
+
       if (t.type == 'purchase') {
         debit = t.amount;
         runningBalance += t.amount;
-      } else if (t.type == 'payment') {
+      } else {
         credit = t.amount;
         runningBalance -= t.amount;
       }
 
-      statementRows.add({
+      rows.add({
         'date': t.date,
         'note': t.note,
         'debit': debit,
@@ -99,87 +149,291 @@ class _SupplierStatementScreenState extends State<SupplierStatementScreen> {
       });
     }
 
-    // حساب إجمالي المشتريات والمدفوعات
-    final totalPurchases = _transactions
+    final totalPurchases = transactions
         .where((t) => t.type == 'purchase')
         .fold(0.0, (sum, t) => sum + t.amount);
-    
-    final totalPayments = _transactions
+
+    final totalPayments = transactions
         .where((t) => t.type == 'payment')
         .fold(0.0, (sum, t) => sum + t.amount);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('كشف حساب ${widget.supplier.companyName}'),
+        title: Text(
+          'كشف حساب ${widget.supplier.companyName}',
+        ),
         centerTitle: true,
         backgroundColor: Colors.teal,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
+          ),
+        ],
       ),
-      body: Column(
-        children: [
-          // بطاقة الملخص
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.teal.shade50,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.teal,
+        icon: const Icon(Icons.payments),
+        label: const Text('سداد'),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddPaymentScreen(
+                accountId: widget.supplier.id,
+                accountType: 'supplier',
+                companyId: widget.supplier.companyId,
+                pharmacyId: widget.supplier.pharmacyId,
+                accountName: widget.supplier.companyName,
+              ),
+            ),
+          );
+
+          _loadData();
+        },
+      ),
+
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : Column(
               children: [
-                _infoCard('إجمالي المشتريات', totalPurchases.toStringAsFixed(2)),
-                _infoCard('إجمالي المدفوعات', totalPayments.toStringAsFixed(2)),
-                _infoCard('الرصيد الحالي', _currentBalance.toStringAsFixed(2)),
+
+                // FILTERS
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickStartDate,
+                          icon: const Icon(Icons.date_range),
+                          label: Text(
+                            _startDate == null
+                                ? 'من تاريخ'
+                                : _formatDate(_startDate!),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickEndDate,
+                          icon: const Icon(Icons.date_range),
+                          label: Text(
+                            _endDate == null
+                                ? 'إلى تاريخ'
+                                : _formatDate(_endDate!),
+                          ),
+                        ),
+                      ),
+
+                      IconButton(
+                        onPressed: () {
+                          setState(() {
+                            _startDate = null;
+                            _endDate = null;
+                          });
+                        },
+                        icon: const Icon(Icons.clear),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // SUMMARY
+                Container(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceAround,
+                    children: [
+
+                      _infoCard(
+                        'المشتريات',
+                        totalPurchases.toStringAsFixed(0),
+                        Colors.orange,
+                      ),
+
+                      _infoCard(
+                        'المدفوعات',
+                        totalPayments.toStringAsFixed(0),
+                        Colors.green,
+                      ),
+
+                      _infoCard(
+                        'الرصيد',
+                        _currentBalance.toStringAsFixed(0),
+                        Colors.red,
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                Expanded(
+                  child: rows.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'لا توجد معاملات',
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          scrollDirection:
+                              Axis.horizontal,
+                          child: DataTable(
+                            columnSpacing: 18,
+                            headingRowColor:
+                                MaterialStateProperty.all(
+                              Colors.teal.shade100,
+                            ),
+                            columns: const [
+
+                              DataColumn(
+                                label: Text('التاريخ'),
+                              ),
+
+                              DataColumn(
+                                label: Text('البيان'),
+                              ),
+
+                              DataColumn(
+                                label: Text('مدين'),
+                                numeric: true,
+                              ),
+
+                              DataColumn(
+                                label: Text('دائن'),
+                                numeric: true,
+                              ),
+
+                              DataColumn(
+                                label: Text('الرصيد'),
+                                numeric: true,
+                              ),
+                            ],
+                            rows: rows.map((row) {
+                              return DataRow(
+                                cells: [
+
+                                  DataCell(
+                                    Text(
+                                      _formatDate(
+                                        row['date'],
+                                      ),
+                                    ),
+                                  ),
+
+                                  DataCell(
+                                    SizedBox(
+                                      width: 240,
+                                      child: Text(
+                                        row['note'],
+                                      ),
+                                    ),
+                                  ),
+
+                                  DataCell(
+                                    Text(
+                                      row['debit'] > 0
+                                          ? row['debit']
+                                              .toStringAsFixed(0)
+                                          : '--',
+                                      style:
+                                          const TextStyle(
+                                        color:
+                                            Colors.red,
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,
+                                      ),
+                                    ),
+                                  ),
+
+                                  DataCell(
+                                    Text(
+                                      row['credit'] > 0
+                                          ? row['credit']
+                                              .toStringAsFixed(0)
+                                          : '--',
+                                      style:
+                                          const TextStyle(
+                                        color:
+                                            Colors.green,
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,
+                                      ),
+                                    ),
+                                  ),
+
+                                  DataCell(
+                                    Text(
+                                      row['balance']
+                                          .toStringAsFixed(
+                                              0),
+                                      style:
+                                          const TextStyle(
+                                        fontWeight:
+                                            FontWeight
+                                                .bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
-          
-          // جدول كشف الحساب
-          Expanded(
-            child: statementRows.isEmpty
-                ? const Center(child: Text('لا توجد معاملات'))
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 16,
-                      columns: const [
-                        DataColumn(label: Text('التاريخ')),
-                        DataColumn(label: Text('البيان')),
-                        DataColumn(label: Text('مدين'), numeric: true),
-                        DataColumn(label: Text('دائن'), numeric: true),
-                        DataColumn(label: Text('الرصيد'), numeric: true),
-                      ],
-                      rows: statementRows.map((row) {
-                        return DataRow(cells: [
-                          DataCell(Text(_formatDate(row['date'] as DateTime))),
-                          DataCell(SizedBox(width: 200, child: Text(row['note'] as String))),
-                          DataCell(Text((row['debit'] as double) > 0 ? (row['debit'] as double).toStringAsFixed(2) : '--')),
-                          DataCell(Text((row['credit'] as double) > 0 ? (row['credit'] as double).toStringAsFixed(2) : '--')),
-                          DataCell(Text((row['balance'] as double).toStringAsFixed(2))),
-                        ]);
-                      }).toList(),
-                    ),
-                  ),
-          ),
-        ],
-      ),
     );
   }
 
-  Widget _infoCard(String title, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal)),
-        ],
-      ),
+  Widget _infoCard(
+    String title,
+    String value,
+    Color color,
+  ) {
+    return Column(
+      children: [
+
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.grey,
+            fontSize: 12,
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 
-  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
 }

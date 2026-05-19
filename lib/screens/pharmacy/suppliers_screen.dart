@@ -1,21 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/account_provider.dart';
-import '../../services/auth_service.dart';
 import '../../models/account_model.dart';
+
 import 'supplier_statement_screen.dart';
+import '../payments/add_payment_screen.dart';
 
 class SuppliersScreen extends StatefulWidget {
-  const SuppliersScreen({Key? key}) : super(key: key);
+  final String pharmacyId;
+
+ const SuppliersScreen({
+    Key? key,
+    required this.pharmacyId,
+  }) : super(key: key);
 
   @override
-  State<SuppliersScreen> createState() => _SuppliersScreenState();
+  State<SuppliersScreen> createState() =>
+      _SuppliersScreenState();
 }
 
-class _SuppliersScreenState extends State<SuppliersScreen> {
-  List<SupplierAccount> _suppliers = [];
+class _SuppliersScreenState
+    extends State<SuppliersScreen> {
   bool _isLoading = true;
-  Map<String, double> _balances = {};
 
   @override
   void initState() {
@@ -25,177 +32,334 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
 
   Future<void> _loadSuppliers() async {
     setState(() => _isLoading = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final pharmacyId = auth.currentPharmacyId;
-    
-    if (pharmacyId == null || auth.currentUserType != 'pharmacy') {
-      setState(() => _isLoading = false);
-      return;
-    }
-    
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    await accountProvider.loadSuppliersForPharmacy(pharmacyId);
-    
-    final suppliers = accountProvider.suppliers;
-    
-    // جلب الأرصدة لكل مورد
-    final Map<String, double> tempBalances = {};
-    for (var supplier in suppliers) {
-      final balance = await accountProvider.getAccountBalance(supplier.id);
-      tempBalances[supplier.id] = balance;
-    }
-    
-    setState(() {
-      _suppliers = suppliers;
-      _balances = tempBalances;
-      _isLoading = false;
-    });
-  }
 
-  Future<void> _refresh() async {
-    await _loadSuppliers();
-  }
+    try {
+      final provider =
+          Provider.of<AccountProvider>(
+        context,
+        listen: false,
+      );
 
-  void _makePayment(SupplierAccount supplier) {
-    final amountController = TextEditingController();
-    final noteController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('سداد دفعة لـ ${supplier.companyName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'المبلغ'),
-            ),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(labelText: 'ملاحظة'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () async {
-              final amount = double.tryParse(amountController.text) ?? 0;
-              if (amount <= 0) return;
-              
-              final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-              
-              // استخدام createOrderLedgerEntry للتسديد
-              await accountProvider.createOrderLedgerEntry(
-                orderId: DateTime.now().millisecondsSinceEpoch.toString(),
-                accountId: supplier.id,
-                accountType: 'supplier',
-                amount: amount,
-                direction: 'payment',
-                companyId: supplier.companyId,
-                pharmacyId: supplier.pharmacyId,
-              );
-              
-              Navigator.pop(ctx);
-              _refresh();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('تم تسجيل سداد بمبلغ $amount')),
-              );
-            },
-            child: const Text('تسجيل'),
-          ),
-        ],
-      ),
-    );
+      await provider.loadSuppliersForPharmacy(
+        widget.pharmacyId,
+      );
+    } catch (e) {
+      debugPrint('Load Suppliers Error: $e');
+    }
+
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = Provider.of<AuthService>(context);
-    
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('حسابات الموردين'), backgroundColor: Colors.teal),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-    
-    if (auth.currentUserType != 'pharmacy') {
-      return Scaffold(
-        appBar: AppBar(title: const Text('غير مصرح'), backgroundColor: Colors.red),
-        body: const Center(child: Text('هذه الصفحة مخصصة للصيدليات فقط')),
-      );
-    }
-    
+    final provider =
+        Provider.of<AccountProvider>(context);
+
+    final suppliers = provider.suppliers;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('حسابات الموردين'), backgroundColor: Colors.teal),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: _suppliers.isEmpty
-            ? const Center(child: Text('لا توجد موردين'))
-            : ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: _suppliers.length,
-                itemBuilder: (context, index) {
-                  final supplier = _suppliers[index];
-                  final balance = _balances[supplier.id] ?? 0;
-                  
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 6),
-                    child: ExpansionTile(
-                      title: Text(supplier.companyName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('الرصيد: ${balance.toStringAsFixed(2)}'),
-                      leading: CircleAvatar(
-                        backgroundColor: balance > 0 ? Colors.red.shade100 : Colors.green.shade100,
-                        child: Text('${balance.toStringAsFixed(0)}'),
-                      ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('الهاتف: ${supplier.phone}'),
-                              const Divider(),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => SupplierStatementScreen(supplier: supplier),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(Icons.receipt),
-                                    label: const Text('كشف حساب'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  ElevatedButton.icon(
-                                    onPressed: () => _makePayment(supplier),
-                                    icon: const Icon(Icons.payment),
-                                    label: const Text('سداد دفعة'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              const Text('ملاحظة: الرصيد الموجب يعني دين عليك للمورد',
-                                style: TextStyle(fontSize: 12, color: Colors.grey)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+      appBar: AppBar(
+        title: const Text('حسابات الموردين'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadSuppliers,
+          ),
+        ],
       ),
+
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : suppliers.isEmpty
+              ? const Center(
+                  child: Text(
+                    'لا توجد حسابات موردين',
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: suppliers.length,
+                  itemBuilder: (context, index) {
+                    final supplier =
+                        suppliers[index];
+
+                    return FutureBuilder<double>(
+                      future: provider
+                          .getAccountBalance(
+                        supplier.id,
+                      ),
+                      builder: (context, snapshot) {
+                        final balance =
+                            snapshot.data ?? 0;
+
+                        return Card(
+                          elevation: 3,
+                          margin:
+                              const EdgeInsets.only(
+                            bottom: 12,
+                          ),
+                          shape:
+                              RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(
+                              16,
+                            ),
+                          ),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.all(
+                              16,
+                            ),
+                            child: Column(
+                              children: [
+
+                                Row(
+                                  children: [
+
+                                    CircleAvatar(
+                                      radius: 26,
+                                      backgroundColor:
+                                          Colors.teal
+                                              .shade100,
+                                      child: const Icon(
+                                        Icons.business,
+                                        color:
+                                            Colors.teal,
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                        width: 12),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment
+                                                .start,
+                                        children: [
+
+                                          Text(
+                                            supplier
+                                                .companyName,
+                                            style:
+                                                const TextStyle(
+                                              fontSize:
+                                                  17,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .bold,
+                                            ),
+                                          ),
+
+                                          const SizedBox(
+                                              height:
+                                                  4),
+
+                                          Text(
+                                            supplier
+                                                    .phone
+                                                    .isEmpty
+                                                ? 'بدون رقم'
+                                                : supplier
+                                                    .phone,
+                                            style:
+                                                const TextStyle(
+                                              color:
+                                                  Colors
+                                                      .grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    Container(
+                                      padding:
+                                          const EdgeInsets
+                                              .symmetric(
+                                        horizontal: 14,
+                                        vertical: 8,
+                                      ),
+                                      decoration:
+                                          BoxDecoration(
+                                        color: balance >
+                                                0
+                                            ? Colors.red
+                                                .shade50
+                                            : Colors.green
+                                                .shade50,
+                                        borderRadius:
+                                            BorderRadius
+                                                .circular(
+                                          12,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        children: [
+
+                                          const Text(
+                                            'الرصيد',
+                                            style:
+                                                TextStyle(
+                                              fontSize:
+                                                  12,
+                                            ),
+                                          ),
+
+                                          Text(
+                                            balance
+                                                .toStringAsFixed(
+                                                    0),
+                                            style:
+                                                TextStyle(
+                                              color: balance >
+                                                      0
+                                                  ? Colors
+                                                      .red
+                                                  : Colors
+                                                      .green,
+                                              fontWeight:
+                                                  FontWeight
+                                                      .bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(
+                                    height: 16),
+
+                                Row(
+                                  children: [
+
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style:
+                                            ElevatedButton
+                                                .styleFrom(
+                                          backgroundColor:
+                                              Colors.teal,
+                                          padding:
+                                              const EdgeInsets
+                                                  .symmetric(
+                                            vertical:
+                                                12,
+                                          ),
+                                          shape:
+                                              RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius
+                                                    .circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                        icon:
+                                            const Icon(
+                                          Icons.receipt_long,
+                                        ),
+                                        label:
+                                            const Text(
+                                          'كشف الحساب',
+                                        ),
+                                        onPressed:
+                                            () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (_) =>
+                                                      SupplierStatementScreen(
+                                                supplier:
+                                                    supplier,
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+
+                                    const SizedBox(
+                                        width: 12),
+
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style:
+                                            ElevatedButton
+                                                .styleFrom(
+                                          backgroundColor:
+                                              Colors.orange,
+                                          padding:
+                                              const EdgeInsets
+                                                  .symmetric(
+                                            vertical:
+                                                12,
+                                          ),
+                                          shape:
+                                              RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius
+                                                    .circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                        icon:
+                                            const Icon(
+                                          Icons.payments,
+                                        ),
+                                        label:
+                                            const Text(
+                                          'سداد',
+                                        ),
+                                        onPressed:
+                                            () async {
+                                          await Navigator
+                                              .push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder:
+                                                  (_) =>
+                                                      AddPaymentScreen(
+                                                accountId:
+                                                    supplier
+                                                        .id,
+                                                accountType:
+                                                    'supplier',
+                                                companyId:
+                                                    supplier
+                                                        .companyId,
+                                                pharmacyId:
+                                                    supplier
+                                                        .pharmacyId,
+                                                accountName:
+                                                    supplier
+                                                        .companyName,
+                                              ),
+                                            ),
+                                          );
+
+                                          _loadSuppliers();
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
     );
   }
 }

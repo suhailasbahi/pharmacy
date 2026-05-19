@@ -145,10 +145,17 @@ class SupplierAccount {
 // معاملة دفتر أستاذ (مشترك بين الطرفين)
 class LedgerTransaction {
   final String id;
+
   final double amount;
+
   final DateTime date;
+
   final String note;
-  final String type; // 'purchase' (شراء/مبيعات) أو 'payment' (دفع)
+
+  final String type;
+  // purchase | payment
+
+  final String? orderId;
 
   LedgerTransaction({
     required this.id,
@@ -156,7 +163,9 @@ class LedgerTransaction {
     required this.date,
     required this.note,
     required this.type,
+    this.orderId,
   });
+
 
   Map<String, dynamic> toMap() {
     return {

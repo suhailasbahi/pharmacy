@@ -1,49 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/order_provider.dart';
-import '../../providers/account_provider.dart';
-import '../../services/auth_service.dart';
+
 import '../../models/order_model.dart';
+import '../../providers/account_provider.dart';
+import '../../providers/order_provider.dart';
+import '../../services/auth_service.dart';
 
 class CompanyDashboard extends StatefulWidget {
+  const CompanyDashboard({Key? key}) : super(key: key);
+
   @override
   State<CompanyDashboard> createState() => _CompanyDashboardState();
 }
 
 class _CompanyDashboardState extends State<CompanyDashboard> {
+  bool _isLoading = true;
+
   String _selectedFilter = 'all';
   String _selectedCity = 'all';
+
   List<OrderModel> _orders = [];
-  bool _isLoading = true;
   List<String> _cities = [];
 
   @override
   void initState() {
     super.initState();
-    _loadOrders();
+    Future.microtask(() => _loadOrders());
   }
-Future<void> _loadOrders() async {
-  setState(() => _isLoading = true);
-  final auth = Provider.of<AuthService>(context, listen: false);
-  final companyId = auth.currentCompanyId;
-  if (companyId == null) {
-    setState(() => _isLoading = false);
-    return;
-  }
-  final branchId = auth.getEffectiveBranchId();
-  final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-  final orders = await orderProvider.getOrdersForCompany(companyId, branchId: branchId);
-    final citiesSet = <String>{};
-    for (var order in orders) {
-      if (order.pharmacyCity.isNotEmpty) {
-        citiesSet.add(order.pharmacyCity);
+
+  Future<void> _loadOrders() async {
+    try {
+      setState(() => _isLoading = true);
+
+      final auth = Provider.of<AuthService>(context, listen: false);
+
+      final companyId = auth.currentCompanyId;
+
+      if (companyId == null || companyId.isEmpty) {
+        setState(() => _isLoading = false);
+        return;
       }
+
+      final branchId = auth.getEffectiveBranchId();
+
+      final orderProvider =
+          Provider.of<OrderProvider>(context, listen: false);
+
+      final orders = await orderProvider.getOrdersForCompany(
+        companyId,
+        branchId: branchId,
+      );
+
+      final citySet = <String>{};
+
+      for (final order in orders) {
+        if (order.pharmacyCity.trim().isNotEmpty) {
+          citySet.add(order.pharmacyCity);
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _orders = orders;
+
+        _cities = [
+          'all',
+          ...citySet.toList(),
+        ];
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Dashboard Error: $e');
+
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('حدث خطأ أثناء تحميل البيانات: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-    setState(() {
-      _orders = orders;
-      _cities = ['all', ...citiesSet.toList()];
-      _isLoading = false;
-    });
   }
 
   Future<void> _refresh() async {
@@ -52,261 +93,389 @@ Future<void> _loadOrders() async {
 
   List<OrderModel> get filteredOrders {
     return _orders.where((order) {
-      if (_selectedFilter != 'all' && order.status != _selectedFilter) return false;
-      if (_selectedCity != 'all' && order.pharmacyCity != _selectedCity) return false;
-      return true;
+      final matchStatus = _selectedFilter == 'all'
+          ? true
+          : order.status == _selectedFilter;
+
+      final matchCity = _selectedCity == 'all'
+          ? true
+          : order.pharmacyCity == _selectedCity;
+
+      return matchStatus && matchCity;
     }).toList();
   }
 
   int get totalOrders => filteredOrders.length;
-  double get totalRevenue => filteredOrders.fold(0.0, (sum, order) => sum + order.totalPrice);
-  int get pendingCount => filteredOrders.where((o) => o.status == 'pending').length;
-  int get acceptedCount => filteredOrders.where((o) => o.status == 'accepted').length;
-  int get shippedCount => filteredOrders.where((o) => o.status == 'shipped').length;
-  int get deliveredCount => filteredOrders.where((o) => o.status == 'delivered').length;
-  int get rejectedCount => filteredOrders.where((o) => o.status == 'rejected').length;
+
+  double get totalRevenue {
+    return filteredOrders.fold(
+      0.0,
+      (sum, order) => sum + order.totalPrice,
+    );
+  }
+
+  int _countByStatus(String status) {
+    return filteredOrders
+        .where((order) => order.status == status)
+        .length;
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('لوحة التحكم'), centerTitle: true, backgroundColor: Colors.teal),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('لوحة التحكم'), centerTitle: true, backgroundColor: Colors.teal),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              child: GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.5,
-                children: [
-                  if (auth.canViewAllReports || auth.canViewSalesReports)
-                    _buildStatCard('إجمالي الطلبات', totalOrders.toString(), Icons.shopping_bag, Colors.teal),
-                  if (auth.canViewFinancialReports)
-                    _buildStatCard('الإيرادات', '${totalRevenue.toStringAsFixed(2)}', Icons.attach_money, Colors.green),
-                  if (auth.canViewSalesReports)
-                    _buildStatCard('قيد المراجعة', pendingCount.toString(), Icons.hourglass_empty, Colors.orange),
-                  if (auth.canViewInventoryReports)
-                    _buildStatCard('تم الشحن', shippedCount.toString(), Icons.local_shipping, Colors.purple),
-                  if (auth.canViewSalesReports)
-                    _buildStatCard('تم التسليم', deliveredCount.toString(), Icons.check_circle, Colors.green),
-                  if (auth.canViewSalesReports)
-                    _buildStatCard('مرفوض', rejectedCount.toString(), Icons.cancel, Colors.red),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedFilter,
-                          isExpanded: true,
-                          items: const [
-                            DropdownMenuItem(value: 'all', child: Text('جميع الطلبات')),
-                            DropdownMenuItem(value: 'pending', child: Text('قيد المراجعة')),
-                            DropdownMenuItem(value: 'accepted', child: Text('مقبولة')),
-                            DropdownMenuItem(value: 'shipped', child: Text('تم الشحن')),
-                            DropdownMenuItem(value: 'delivered', child: Text('تم التسليم')),
-                            DropdownMenuItem(value: 'rejected', child: Text('مرفوضة')),
-                          ],
-                          onChanged: (value) => setState(() => _selectedFilter = value!),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _selectedCity,
-                          isExpanded: true,
-                          items: _cities.map((city) {
-                            return DropdownMenuItem(
-                              value: city,
-                              child: Text(city == 'all' ? 'جميع المدن' : city),
-                            );
-                          }).toList(),
-                          onChanged: (value) => setState(() => _selectedCity = value!),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: filteredOrders.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text('لا توجد طلبات', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: filteredOrders.length,
-                      itemBuilder: (context, index) => DashboardOrderCard(
-                        order: filteredOrders[index],
-                        onStatusChanged: _refresh,
-                      ),
-                    ),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text('لوحة التحكم'),
+        centerTitle: true,
+        backgroundColor: Colors.teal,
       ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: Column(
+                children: [
+
+                  /// الإحصائيات
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.45,
+                      children: [
+
+                        if (auth.canViewSalesReports)
+                          _buildStatCard(
+                            title: 'إجمالي الطلبات',
+                            value: totalOrders.toString(),
+                            icon: Icons.shopping_bag,
+                            color: Colors.teal,
+                          ),
+
+                        if (auth.canViewFinancialReports)
+                          _buildStatCard(
+                            title: 'الإيرادات',
+                            value:
+                                '${totalRevenue.toStringAsFixed(2)} جنيه',
+                            icon: Icons.attach_money,
+                            color: Colors.green,
+                          ),
+
+                        _buildStatCard(
+                          title: 'قيد المراجعة',
+                          value: _countByStatus('pending').toString(),
+                          icon: Icons.hourglass_empty,
+                          color: Colors.orange,
+                        ),
+
+                        _buildStatCard(
+                          title: 'تم القبول',
+                          value: _countByStatus('accepted').toString(),
+                          icon: Icons.check,
+                          color: Colors.blue,
+                        ),
+
+                        _buildStatCard(
+                          title: 'تم الشحن',
+                          value: _countByStatus('shipped').toString(),
+                          icon: Icons.local_shipping,
+                          color: Colors.purple,
+                        ),
+
+                        _buildStatCard(
+                          title: 'تم التسليم',
+                          value: _countByStatus('delivered').toString(),
+                          icon: Icons.done_all,
+                          color: Colors.green,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  /// الفلاتر
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedFilter,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                              ),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'all',
+                                child: Text('كل الحالات'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'pending',
+                                child: Text('قيد المراجعة'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'accepted',
+                                child: Text('مقبولة'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'shipped',
+                                child: Text('مشحونة'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'delivered',
+                                child: Text('مكتملة'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'rejected',
+                                child: Text('مرفوضة'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedFilter = value!;
+                              });
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(width: 10),
+
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedCity,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.circular(10),
+                              ),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            items: _cities.map((city) {
+                              return DropdownMenuItem(
+                                value: city,
+                                child: Text(
+                                  city == 'all'
+                                      ? 'كل المدن'
+                                      : city,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedCity = value!;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  /// الطلبات
+                  Expanded(
+                    child: filteredOrders.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'لا توجد طلبات',
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: filteredOrders.length,
+                            itemBuilder: (context, index) {
+                              return DashboardOrderCard(
+                                order: filteredOrders[index],
+                                onStatusChanged: _refresh,
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 28, color: color),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-            Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey), textAlign: TextAlign.center),
+
+            Icon(
+              icon,
+              color: color,
+              size: 30,
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.grey,
+              ),
+            ),
           ],
         ),
       ),
     );
-  }
-}
-
-// DashboardOrderCard كما هو (لم يتغير) ...
-// (نفس الكود السابق)
-
-class DashboardOrderCard extends StatefulWidget {
+      }
+    }
+      class DashboardOrderCard extends StatefulWidget {
   final OrderModel order;
   final VoidCallback onStatusChanged;
-  const DashboardOrderCard({Key? key, required this.order, required this.onStatusChanged}) : super(key: key);
+
+  const DashboardOrderCard({
+    Key? key,
+    required this.order,
+    required this.onStatusChanged,
+  }) : super(key: key);
 
   @override
-  State<DashboardOrderCard> createState() => _DashboardOrderCardState();
+  State<DashboardOrderCard> createState() =>
+      _DashboardOrderCardState();
 }
 
-class _DashboardOrderCardState extends State<DashboardOrderCard> {
+class _DashboardOrderCardState
+    extends State<DashboardOrderCard> {
+
   bool _isExpanded = false;
-  final TextEditingController _rejectReasonController = TextEditingController();
 
   String _getStatusText(String status) {
     switch (status) {
-      case 'pending': return 'قيد المراجعة';
-      case 'accepted': return 'تم القبول';
-      case 'rejected': return 'مرفوض';
-      case 'shipped': return 'تم الشحن';
-      case 'delivered': return 'تم التسليم';
-      default: return status;
+      case 'pending':
+        return 'قيد المراجعة';
+
+      case 'accepted':
+        return 'مقبول';
+
+      case 'shipped':
+        return 'تم الشحن';
+
+      case 'delivered':
+        return 'تم التسليم';
+
+      case 'rejected':
+        return 'مرفوض';
+
+      default:
+        return status;
     }
   }
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'pending': return Colors.orange;
-      case 'accepted': return Colors.blue;
-      case 'rejected': return Colors.red;
-      case 'shipped': return Colors.purple;
-      case 'delivered': return Colors.green;
-      default: return Colors.grey;
+      case 'pending':
+        return Colors.orange;
+
+      case 'accepted':
+        return Colors.blue;
+
+      case 'shipped':
+        return Colors.purple;
+
+      case 'delivered':
+        return Colors.green;
+
+      case 'rejected':
+        return Colors.red;
+
+      default:
+        return Colors.grey;
     }
   }
 
   Future<void> _acceptOrder() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    await orderProvider.acceptOrder(widget.order.id, accountProvider);
+    final orderProvider =
+        Provider.of<OrderProvider>(context, listen: false);
+
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+
+    await orderProvider.acceptOrder(
+      widget.order.id,
+      accountProvider,
+    );
+
     widget.onStatusChanged();
+
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم قبول الطلب'), backgroundColor: Colors.green),
+      const SnackBar(
+        content: Text('تم قبول الطلب'),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
-  Future<void> _rejectOrder() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    await orderProvider.rejectOrder(widget.order.id, _rejectReasonController.text, null);
-    widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم رفض الطلب'), backgroundColor: Colors.red),
-    );
-  }
+  Future<void> _updateStatus(String status) async {
+    final orderProvider =
+        Provider.of<OrderProvider>(context, listen: false);
 
-  Future<void> _updateShipping() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    await orderProvider.updateOrderStatus(widget.order.id, 'shipped');
-    widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تأكيد الشحن'), backgroundColor: Colors.purple),
+    await orderProvider.updateOrderStatus(
+      widget.order.id,
+      status,
     );
-  }
 
-  Future<void> _updateDelivered() async {
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    await orderProvider.updateOrderStatus(widget.order.id, 'delivered');
     widget.onStatusChanged();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم تسليم الطلب'), backgroundColor: Colors.green),
-    );
-  }
 
-  void _showRejectDialog() {
-    _rejectReasonController.clear();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('رفض الطلب', style: TextStyle(color: Colors.red)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('يرجى كتابة سبب الرفض:'),
-            const SizedBox(height: 16),
-            TextField(controller: _rejectReasonController, decoration: const InputDecoration(hintText: 'مثال: المنتج غير متوفر'), maxLines: 3),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              if (_rejectReasonController.text.isNotEmpty) {
-                Navigator.pop(ctx);
-                _rejectOrder();
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('يرجى كتابة سبب الرفض'), backgroundColor: Colors.orange),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('تأكيد الرفض'),
-          ),
-        ],
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تم تحديث حالة الطلب'),
+        backgroundColor: Colors.teal,
       ),
     );
   }
@@ -314,63 +483,144 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Column(
         children: [
+
           InkWell(
-            onTap: () => setState(() => _isExpanded = !_isExpanded),
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               child: Column(
                 children: [
+
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+
                       Expanded(
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
                           children: [
-                            Text('#${widget.order.id.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+
+                            Text(
+                              '#${widget.order.id.substring(0, 8)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+
+                            const SizedBox(height: 6),
+
+                            Text(
+                              widget.order.pharmacyName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                              ),
+                            ),
+
                             const SizedBox(height: 4),
-                            Text('صيدلية: ${widget.order.pharmacyName}', style: const TextStyle(fontSize: 12)),
-                            Text('المدينة: ${widget.order.pharmacyCity}', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                            Text('نوع الدفع: ${widget.order.paymentTypeText} - ${widget.order.paymentMethodText}', style: TextStyle(fontSize: 12, color: Colors.grey)),
+
+                            Text(
+                              widget.order.pharmacyCity,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ],
                         ),
                       ),
+
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(widget.order.status).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
+                          color: _getStatusColor(
+                            widget.order.status,
+                          ).withOpacity(0.1),
+                          borderRadius:
+                              BorderRadius.circular(20),
                         ),
                         child: Text(
-                          _getStatusText(widget.order.status),
-                          style: TextStyle(fontSize: 12, color: _getStatusColor(widget.order.status)),
+                          _getStatusText(
+                            widget.order.status,
+                          ),
+                          style: TextStyle(
+                            color: _getStatusColor(
+                              widget.order.status,
+                            ),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
                   ),
+
                   const SizedBox(height: 12),
+
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${widget.order.items.length} منتجات', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+
+                      Text(
+                        '${widget.order.items.length} منتجات',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                        ),
+                      ),
+
                       Text(
                         '${widget.order.totalPrice.toStringAsFixed(2)} جنيه',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 10),
+
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment:
+                        MainAxisAlignment.center,
                     children: [
-                      Icon(_isExpanded ? Icons.expand_less : Icons.expand_more, size: 20, color: Colors.grey),
+
+                      Icon(
+                        _isExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+
+                      const SizedBox(width: 4),
+
                       Text(
-                        _isExpanded ? 'إخفاء التفاصيل' : 'عرض التفاصيل',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        _isExpanded
+                            ? 'إخفاء التفاصيل'
+                            : 'عرض التفاصيل',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -378,77 +628,128 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
               ),
             ),
           ),
+
           if (_isExpanded)
             Container(
-              padding: const EdgeInsets.all(16),
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.grey.shade50,
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(14),
+                ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  const Text('المنتجات:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: widget.order.items.length,
-                    itemBuilder: (ctx, idx) {
-                      final item = widget.order.items[idx];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              '${item.productName} (${item.quantity} ${item.unit == 'carton' ? 'كرتون' : 'باكيت'}) - ${item.quantityInPieces} باكيت',
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            Text('${(item.price * item.quantity).toStringAsFixed(2)} جنيه'),
-                          ],
-                        ),
-                      );
-                    },
+
+                  const Text(
+                    'المنتجات',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  const Divider(),
+
+                  const SizedBox(height: 10),
+
+                  ...widget.order.items.map((item) {
+                    return Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment:
+                            MainAxisAlignment.spaceBetween,
+                        children: [
+
+                          Expanded(
+                            child: Text(
+                              '${item.productName} × ${item.quantity}',
+                            ),
+                          ),
+
+                          Text(
+                            '${(item.price * item.quantity).toStringAsFixed(2)}',
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+
+                  const Divider(height: 25),
+
                   if (widget.order.status == 'pending')
                     Row(
                       children: [
-                        if (auth.canRejectOrder)
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _showRejectDialog,
-                              style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
-                              child: const Text('رفض', style: TextStyle(color: Colors.red)),
-                            ),
-                          ),
-                        if (auth.canRejectOrder && auth.canAcceptOrder) const SizedBox(width: 8),
+
                         if (auth.canAcceptOrder)
                           Expanded(
                             child: ElevatedButton(
                               onPressed: _acceptOrder,
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-                              child: const Text('قبول'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    Colors.teal,
+                              ),
+                              child: const Text(
+                                'قبول الطلب',
+                              ),
+                            ),
+                          ),
+
+                        if (auth.canAcceptOrder)
+                          const SizedBox(width: 10),
+
+                        if (auth.canRejectOrder)
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                _updateStatus(
+                                  'rejected',
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor:
+                                    Colors.red,
+                              ),
+                              child: const Text(
+                                'رفض الطلب',
+                              ),
                             ),
                           ),
                       ],
                     ),
-                  if (widget.order.status == 'accepted' && auth.canShipOrder)
+
+                  if (widget.order.status == 'accepted')
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _updateShipping,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
-                        child: const Text('تأكيد الشحن'),
+                        onPressed: () {
+                          _updateStatus('shipped');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Colors.purple,
+                        ),
+                        child: const Text(
+                          'تأكيد الشحن',
+                        ),
                       ),
                     ),
-                  if (widget.order.status == 'shipped' && auth.canDeliverOrder)
+
+                  if (widget.order.status == 'shipped')
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _updateDelivered,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        child: const Text('تسليم الطلب'),
+                        onPressed: () {
+                          _updateStatus('delivered');
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Colors.green,
+                        ),
+                        child: const Text(
+                          'تأكيد التسليم',
+                        ),
                       ),
                     ),
                 ],
@@ -459,3 +760,4 @@ class _DashboardOrderCardState extends State<DashboardOrderCard> {
     );
   }
 }
+  
