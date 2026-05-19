@@ -5,7 +5,7 @@ class ProductModel {
   final String id;
   final String companyId;
   final String companyName;
-  final String agencyId;          // جديد
+  final String agencyId;
   final String name;
   final String scientificName;
   final String concentration;
@@ -23,8 +23,8 @@ class ProductModel {
   final int piecesPerCarton;
   final String defaultUnit;
   final int minOrderQuantity;
-  final bool hasOffer;
-  final double? offerPrice;
+  final bool hasOffer;      // ملاحظة: هذا للعرض العام (تم إهماله لصالح العروض حسب المنطقة)
+  final double? offerPrice; // ملاحظة: هذا للعرض العام (تم إهماله لصالح العروض حسب المنطقة)
   final String? createdBy;
   final String? branchId;
 
@@ -56,28 +56,45 @@ class ProductModel {
     this.branchId,
   });
 
+  // الحصول على التسعير الخاص بمنطقة معينة
+  RegionPricing? getPricingForRegion(String regionId) {
+    try {
+      return regionPrices.firstWhere((p) => p.regionId == regionId);
+    } catch (e) {
+      return regionPrices.isNotEmpty ? regionPrices.first : null;
+    }
+  }
+
   double getBasePriceForRegion(String regionId) {
-    final pricing = regionPrices.firstWhere(
-      (p) => p.regionId == regionId,
-      orElse: () => regionPrices.isNotEmpty ? regionPrices.first : RegionPricing(regionId: regionId, regionName: '', price: 0, currency: 'yemen'),
-    );
-    return pricing.price;
+    final pricing = getPricingForRegion(regionId);
+    if (pricing == null) return 0;
+    return pricing.getBasePrice();
   }
 
   double getFinalPriceForRegion(String regionId) {
-    final pricing = regionPrices.firstWhere(
-      (p) => p.regionId == regionId,
-      orElse: () => regionPrices.isNotEmpty ? regionPrices.first : RegionPricing(regionId: regionId, regionName: '', price: 0, currency: 'yemen'),
-    );
-    return pricing.price + (pricing.price * pricing.taxRate / 100);
+    final pricing = getPricingForRegion(regionId);
+    if (pricing == null) return 0;
+    return pricing.getFinalPrice();
+  }
+
+  // التحقق مما إذا كان هناك عرض لهذه المنطقة
+  bool hasOfferForRegion(String regionId) {
+    final pricing = getPricingForRegion(regionId);
+    return pricing?.hasOffer ?? false;
+  }
+
+  // الحصول على سعر العرض لهذه المنطقة (إذا موجود)
+  double? getOfferPriceForRegion(String regionId) {
+    final pricing = getPricingForRegion(regionId);
+    if (pricing != null && pricing.hasOffer && pricing.offerPrice != null) {
+      return pricing.offerPrice! + (pricing.offerPrice! * pricing.taxRate / 100);
+    }
+    return null;
   }
 
   String getCurrencyForRegion(String regionId) {
-    final pricing = regionPrices.firstWhere(
-      (p) => p.regionId == regionId,
-      orElse: () => regionPrices.isNotEmpty ? regionPrices.first : RegionPricing(regionId: regionId, regionName: '', price: 0, currency: 'yemen'),
-    );
-    return pricing.currency;
+    final pricing = getPricingForRegion(regionId);
+    return pricing?.currency ?? 'yemen';
   }
 
   String get currencySymbol {

@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/order_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
-import '../../models/region.dart';
 
 class SalesByRegionScreen extends StatefulWidget {
   const SalesByRegionScreen({Key? key}) : super(key: key);
 
   @override
-  State<SalesByRegionScreen> createState() => _SalesByRegionScreenState();
+  State<SalesByRegionScreen> createState() =>
+      _SalesByRegionScreenState();
 }
 
-class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
-  String _selectedRegionId = 'all';
-  DateTimeRange? _dateRange;
-  List<OrderModel> _allOrders = [];
+class _SalesByRegionScreenState
+    extends State<SalesByRegionScreen> {
   bool _isLoading = true;
-  List<Region> _regions = [];
+
+  DateTimeRange? _dateRange;
+
+  List<OrderModel> _orders = [];
 
   @override
   void initState() {
@@ -27,45 +29,52 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId;
-    if (companyId == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
-    
-    if (_dateRange != null) {
-      orders = orders.where((o) =>
-          o.date.isAfter(_dateRange!.start) &&
-          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
-    }
-    
-    // استخراج المناطق من الطلبات الفعلية
-    final Set<String> regionNames = {};
-    for (var order in orders) {
-      if (order.pharmacyCity.isNotEmpty) {
-        regionNames.add(order.pharmacyCity);
+
+    try {
+      final auth =
+          Provider.of<AuthService>(context, listen: false);
+
+      final orderProvider =
+          Provider.of<OrderProvider>(context, listen: false);
+
+      final companyId = auth.currentCompanyId;
+
+      if (companyId == null) {
+        setState(() => _isLoading = false);
+        return;
       }
+
+      List<OrderModel> orders =
+          await orderProvider.getOrdersForCompany(companyId);
+
+      // فقط الطلبات المكتملة
+      orders = orders.where((o) {
+        return o.status == 'accepted' ||
+            o.status == 'shipped' ||
+            o.status == 'delivered';
+      }).toList();
+
+      // فلترة التاريخ
+      if (_dateRange != null) {
+        orders = orders.where((o) {
+          return o.date.isAfter(
+                  _dateRange!.start.subtract(
+                      const Duration(days: 1))) &&
+              o.date.isBefore(
+                  _dateRange!.end.add(
+                      const Duration(days: 1)));
+        }).toList();
+      }
+
+      setState(() {
+        _orders = orders;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('SalesByRegionScreen Error: $e');
+
+      setState(() => _isLoading = false);
     }
-    
-    final List<Region> allRegions = Region.allRegions;
-    final List<Region> regionsList = [];
-    for (var name in regionNames) {
-      final matched = allRegions.firstWhere(
-        (r) => r.name == name,
-        orElse: () => Region('other', name),
-      );
-      regionsList.add(matched);
-    }
-    regionsList.sort((a, b) => a.name.compareTo(b.name));
-    
-    setState(() {
-      _allOrders = orders;
-      _regions = regionsList;
-      _isLoading = false;
-    });
   }
 
   Future<void> _refresh() async {
@@ -75,85 +84,82 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
   Future<void> _selectDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2024, 1, 1),
+      firstDate: DateTime(2024),
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
+
     if (picked != null) {
       setState(() => _dateRange = picked);
+
       await _loadData();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ===============================
+    // تجميع البيانات حسب المنطقة
+    // ===============================
+
+    Map<String, Map<String, dynamic>> regionStats = {};
+
+    double totalSales = 0;
+
+    for (var order in _orders) {
+      final region =
+          order.pharmacyCity.isNotEmpty
+              ? order.pharmacyCity
+              : 'غير محددة';
+
+      if (!regionStats.containsKey(region)) {
+        regionStats[region] = {
+          'sales': 0.0,
+          'orders': 0,
+          'customers': <String>{},
+        };
+      }
+
+      regionStats[region]!['sales'] += order.totalPrice;
+
+      regionStats[region]!['orders'] += 1;
+
+      (regionStats[region]!['customers']
+              as Set<String>)
+          .add(order.pharmacyId);
+
+      totalSales += order.totalPrice;
+    }
+
+    final entries = regionStats.entries.toList();
+
+    entries.sort((a, b) {
+      return (b.value['sales'] as double)
+          .compareTo(a.value['sales'] as double);
+    });
+
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('المبيعات حسب المحافظة'),
+          title: const Text('المبيعات حسب المناطق'),
           centerTitle: true,
           backgroundColor: Colors.teal,
         ),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    List<OrderModel> filteredOrders = List.from(_allOrders);
-    
-    if (_selectedRegionId != 'all') {
-      try {
-        final regionName = Region.getNameById(_selectedRegionId);
-        filteredOrders = filteredOrders.where((o) => o.pharmacyCity == regionName).toList();
-      } catch (e) {
-        print('Error filtering by region: $e');
-      }
-    }
-
-    // تجميع البيانات
-    Map<String, double> salesByCity = {};
-    Map<String, double> cashByCity = {};
-    Map<String, double> creditByCity = {};
-
-    for (var order in filteredOrders) {
-      final city = order.pharmacyCity;
-      final amount = order.totalPrice;
-      salesByCity[city] = (salesByCity[city] ?? 0) + amount;
-      if (order.paymentType == 'cash') {
-        cashByCity[city] = (cashByCity[city] ?? 0) + amount;
-      } else {
-        creditByCity[city] = (creditByCity[city] ?? 0) + amount;
-      }
-    }
-
-    final entries = salesByCity.entries.toList();
-    entries.sort((a, b) => b.value.compareTo(a.value));
-
-    // حساب الإجماليات
-    final totalSales = filteredOrders.fold(0.0, (s, o) => s + o.totalPrice);
-    final totalCash = cashByCity.values.fold(0.0, (s, v) => s + v);
-    final totalCredit = creditByCity.values.fold(0.0, (s, v) => s + v);
-
-    if (filteredOrders.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('المبيعات حسب المحافظة'),
-          centerTitle: true,
-          backgroundColor: Colors.teal,
+        body: const Center(
+          child: CircularProgressIndicator(),
         ),
-        body: const Center(child: Text('لا توجد مبيعات في هذه الفترة')),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('المبيعات حسب المحافظة'),
+        title: const Text('المبيعات حسب المناطق'),
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
           IconButton(
             icon: const Icon(Icons.date_range),
             onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
           ),
         ],
       ),
@@ -161,85 +167,168 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
         onRefresh: _refresh,
         child: Column(
           children: [
+            // ==========================
+            // التاريخ
+            // ==========================
+
             if (_dateRange != null)
               Container(
-                padding: const EdgeInsets.all(8),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 color: Colors.grey.shade100,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                    Text(
+                      'من ${_formatDate(_dateRange!.start)} '
+                      'إلى ${_formatDate(_dateRange!.end)}',
+                    ),
                     TextButton(
                       onPressed: () async {
-                        setState(() => _dateRange = null);
+                        setState(
+                            () => _dateRange = null);
+
                         await _loadData();
                       },
-                      child: const Text('إلغاء التصفية'),
+                      child: const Text(
+                        'إلغاء التصفية',
+                      ),
                     ),
                   ],
                 ),
               ),
+
+            // ==========================
+            // الملخص
+            // ==========================
+
             Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  _buildSummaryCard('إجمالي المبيعات', totalSales, Colors.teal),
+                  _buildSummaryCard(
+                    'إجمالي المناطق',
+                    entries.length.toString(),
+                    Icons.map,
+                    Colors.teal,
+                  ),
+
                   const SizedBox(width: 12),
-                  _buildSummaryCard('نقدي', totalCash, Colors.green),
-                  const SizedBox(width: 12),
-                  _buildSummaryCard('آجل', totalCredit, Colors.orange),
+
+                  _buildSummaryCard(
+                    'إجمالي المبيعات',
+                    totalSales.toStringAsFixed(0),
+                    Icons.attach_money,
+                    Colors.green,
+                  ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: DropdownButtonFormField<String>(
-                value: _selectedRegionId,
-                decoration: const InputDecoration(labelText: 'اختر المحافظة'),
-                items: [
-                  const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
-                  ..._regions.map((region) => DropdownMenuItem(
-                        value: region.id,
-                        child: Text(region.name),
-                      )),
-                ],
-                onChanged: (val) async {
-                  setState(() {
-                    _selectedRegionId = val!;
-                  });
-                  await _loadData();
-                },
-              ),
-            ),
+
+            // ==========================
+            // القائمة
+            // ==========================
+
             Expanded(
               child: entries.isEmpty
-                  ? const Center(child: Text('لا توجد مبيعات'))
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columnSpacing: 20,
-                        columns: const [
-                          DataColumn(label: Text('المحافظة')),
-                          DataColumn(label: Text('إجمالي المبيعات'), numeric: true),
-                          DataColumn(label: Text('نقدي'), numeric: true),
-                          DataColumn(label: Text('آجل'), numeric: true),
-                          DataColumn(label: Text('النسبة المئوية'), numeric: true),
-                        ],
-                        rows: entries.map((entry) {
-                          final city = entry.key;
-                          final total = entry.value;
-                          final cash = cashByCity[city] ?? 0;
-                          final credit = creditByCity[city] ?? 0;
-                          final percentage = totalSales > 0 ? (total / totalSales) * 100 : 0;
-                          return DataRow(cells: [
-                            DataCell(Text(city)),
-                            DataCell(Text('${total.toStringAsFixed(2)}')),
-                            DataCell(Text('${cash.toStringAsFixed(2)}')),
-                            DataCell(Text('${credit.toStringAsFixed(2)}')),
-                            DataCell(Text('${percentage.toStringAsFixed(1)}%')),
-                          ]);
-                        }).toList(),
+                  ? const Center(
+                      child: Text(
+                        'لا توجد بيانات',
                       ),
+                    )
+                  : ListView.builder(
+                      padding:
+                          const EdgeInsets.all(8),
+                      itemCount: entries.length,
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+
+                        final region = entry.key;
+
+                        final sales =
+                            entry.value['sales']
+                                as double;
+
+                        final orders =
+                            entry.value['orders']
+                                as int;
+
+                        final customers =
+                            (entry.value['customers']
+                                    as Set<String>)
+                                .length;
+
+                        final percentage =
+                            totalSales > 0
+                                ? (sales /
+                                        totalSales) *
+                                    100
+                                : 0;
+
+                        final avgOrder =
+                            orders > 0
+                                ? sales / orders
+                                : 0;
+
+                        return Card(
+                          margin:
+                              const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 6,
+                          ),
+                          child: ExpansionTile(
+                            leading: CircleAvatar(
+                              backgroundColor:
+                                  Colors.teal,
+                              child: Text(
+                                '${index + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            title: Text(region),
+                            subtitle: Text(
+                              'المبيعات: '
+                              '${sales.toStringAsFixed(2)}',
+                            ),
+                            trailing: Text(
+                              '${percentage.toStringAsFixed(1)}%',
+                              style: const TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                                color: Colors.teal,
+                              ),
+                            ),
+                            children: [
+                              Padding(
+                                padding:
+                                    const EdgeInsets.all(
+                                        12),
+                                child: Column(
+                                  children: [
+                                    _buildInfoRow(
+                                      'عدد الطلبات',
+                                      orders.toString(),
+                                    ),
+                                    _buildInfoRow(
+                                      'عدد العملاء',
+                                      customers.toString(),
+                                    ),
+                                    _buildInfoRow(
+                                      'متوسط الطلب',
+                                      avgOrder
+                                          .toStringAsFixed(
+                                              2),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -248,17 +337,42 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String title, double value, Color color) {
+  Widget _buildSummaryCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Card(
         color: color.withOpacity(0.1),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           child: Column(
             children: [
-              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+              Icon(icon, color: color),
+
+              const SizedBox(height: 6),
+
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+
               const SizedBox(height: 4),
-              Text('${value.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ),
@@ -266,5 +380,31 @@ class _SalesByRegionScreenState extends State<SalesByRegionScreen> {
     );
   }
 
-  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
+  Widget _buildInfoRow(
+    String title,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title),
+
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
 }

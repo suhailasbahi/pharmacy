@@ -17,12 +17,16 @@ class _PriceGroup {
   String currency;
   double taxRate;
   List<Region> regions;
+  bool hasOffer;
+  double? offerPrice;
 
   _PriceGroup({
     required this.price,
     required this.currency,
     required this.taxRate,
     required this.regions,
+    this.hasOffer = false,
+    this.offerPrice,
   });
 }
 
@@ -42,8 +46,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   DateTime? _expiryDate;
   bool _isLoading = false;
   File? _selectedImage;
-  bool _hasOffer = false;
-  final _offerPriceController = TextEditingController();
   String _defaultUnit = 'piece';
   final _pricePerPieceController = TextEditingController();
   final _pricePerCartonController = TextEditingController();
@@ -54,7 +56,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   List<AgencyModel> _agencies = [];
   final ImagePicker _picker = ImagePicker();
   
-  // ========== نظام تسعير المحافظات الجديد ==========
   List<_PriceGroup> _priceGroups = [];
   final List<Region> _allRegions = Region.allRegions;
 
@@ -101,7 +102,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _concentrationController.clear();
     _stockController.clear();
     _minOrderController.clear();
-    _offerPriceController.clear();
     _pricePerPieceController.clear();
     _pricePerCartonController.clear();
     _piecesPerCartonController.clear();
@@ -109,7 +109,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _requiresCooling = false;
       _expiryDate = null;
       _selectedAgency = null;
-      _hasOffer = false;
       _selectedImage = null;
       _defaultUnit = 'piece';
       _bonusCash = null;
@@ -122,7 +121,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
-  // ========== دوال تسعير المحافظات الجديدة ==========
+  // ========== دوال تسعير المحافظات ==========
   
   List<Region> _getUnassignedRegions() {
     final selectedRegionIds = _priceGroups
@@ -131,33 +130,58 @@ class _AddProductScreenState extends State<AddProductScreen> {
     return _allRegions.where((region) => !selectedRegionIds.contains(region.id)).toList();
   }
 
-  void _showAddPriceDialog() {
-    final priceController = TextEditingController();
-    final taxController = TextEditingController();
-    String selectedCurrency = 'yemen';
-    List<Region> selectedRegions = [];
-    List<Region> availableRegions = _getUnassignedRegions();
+  List<Region> _getUnassignedRegionsForDialog(List<Region> currentSelected) {
+    final otherSelectedIds = _priceGroups
+        .expand((g) => g.regions.map((r) => r.id))
+        .where((id) => !currentSelected.map((r) => r.id).contains(id))
+        .toSet();
+    return _allRegions.where((region) => 
+      !otherSelectedIds.contains(region.id) || currentSelected.contains(region)
+    ).toList();
+  }
+
+  void _showAddPriceDialog({_PriceGroup? existingGroup, int? editIndex}) {
+    final priceController = TextEditingController(
+      text: existingGroup?.price.toString() ?? '',
+    );
+    final taxController = TextEditingController(
+      text: existingGroup?.taxRate.toString() ?? '',
+    );
+    final offerPriceController = TextEditingController(
+      text: existingGroup?.offerPrice?.toString() ?? '',
+    );
+    
+    String selectedCurrency = existingGroup?.currency ?? 'yemen';
+    bool hasOffer = existingGroup?.hasOffer ?? false;
+    List<Region> selectedRegions = existingGroup?.regions != null 
+        ? List.from(existingGroup!.regions) 
+        : [];
+    
+    List<Region> availableRegions = _getUnassignedRegionsForDialog(selectedRegions);
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            title: const Text('إضافة سعر جديد'),
+            title: Text(editIndex != null ? 'تعديل مجموعة الأسعار' : 'إضافة سعر جديد'),
             content: SizedBox(
-              width: 320,
+              width: 350,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: priceController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'السعر', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'السعر الأساسي',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: selectedCurrency,
-                    decoration: const InputDecoration(labelText: 'العملة', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(labelText: 'العملة'),
                     items: const [
                       DropdownMenuItem(value: 'yemen', child: Text('ريال يمني')),
                       DropdownMenuItem(value: 'saudi', child: Text('ريال سعودي')),
@@ -169,10 +193,36 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   TextField(
                     controller: taxController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'الضريبة (%)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'الضريبة (%)',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 12),
+                  const Divider(),
+                  SwitchListTile(
+                    title: const Text('تفعيل عرض خاص لهذه المحافظات'),
+                    value: hasOffer,
+                    onChanged: (val) => setDialogState(() => hasOffer = val),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  if (hasOffer)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: TextField(
+                        controller: offerPriceController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'سعر العرض',
+                          border: OutlineInputBorder(),
+                          helperText: 'السعر بعد الخصم لهذه المحافظات',
+                        ),
+                      ),
+                    ),
+                  const Divider(),
+                  const SizedBox(height: 8),
                   const Text('اختر المحافظات:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
                   Container(
                     height: 200,
                     decoration: BoxDecoration(
@@ -217,17 +267,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     _showSnackBar('يرجى اختيار محافظة واحدة على الأقل', Colors.orange);
                     return;
                   }
+                  
+                  final offerPrice = hasOffer ? double.tryParse(offerPriceController.text) : null;
+                  if (hasOffer && (offerPrice == null || offerPrice <= 0)) {
+                    _showSnackBar('يرجى إدخال سعر عرض صحيح', Colors.orange);
+                    return;
+                  }
+                  
                   setState(() {
-                    _priceGroups.add(_PriceGroup(
+                    final newGroup = _PriceGroup(
                       price: price,
                       currency: selectedCurrency,
                       taxRate: double.tryParse(taxController.text) ?? 0,
                       regions: selectedRegions,
-                    ));
+                      hasOffer: hasOffer,
+                      offerPrice: offerPrice,
+                    );
+                    
+                    if (editIndex != null) {
+                      _priceGroups[editIndex] = newGroup;
+                    } else {
+                      _priceGroups.add(newGroup);
+                    }
                   });
+                  
                   Navigator.pop(ctx);
                 },
-                child: const Text('إضافة'),
+                child: Text(editIndex != null ? 'حفظ' : 'إضافة'),
               ),
             ],
           );
@@ -252,6 +318,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
           price: group.price,
           currency: group.currency,
           taxRate: group.taxRate,
+          hasOffer: group.hasOffer,
+          offerPrice: group.offerPrice,
         ));
       }
     }
@@ -268,9 +336,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Widget _buildPriceGroupCard(_PriceGroup group, int index) {
+    final currencySymbol = _getCurrencySymbol(group.currency);
+    
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: Colors.grey.shade50,
+      color: group.hasOffer ? Colors.red.shade50 : Colors.grey.shade50,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -279,9 +349,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '${group.price.toStringAsFixed(2)} ${_getCurrencySymbol(group.currency)}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.teal),
+                Row(
+                  children: [
+                    Text(
+                      '${group.price.toStringAsFixed(2)} $currencySymbol',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
+                    ),
+                    if (group.hasOffer && group.offerPrice != null)
+                      Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'عرض: ${group.offerPrice!.toStringAsFixed(2)} $currencySymbol',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
@@ -295,7 +389,10 @@ class _AddProductScreenState extends State<AddProductScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 4,
-              children: group.regions.map((r) => Chip(label: Text(r.name))).toList(),
+              children: group.regions.map((r) => Chip(
+                label: Text(r.name),
+                backgroundColor: group.hasOffer ? Colors.red.shade100 : Colors.teal.shade50,
+              )).toList(),
             ),
           ],
         ),
@@ -306,7 +403,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildRegionPricingSection() {
     return Card(
       child: ExpansionTile(
-        title: const Text('تسعير المناطق', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('تسعير المناطق والعروض', style: TextStyle(fontWeight: FontWeight.bold)),
         initiallyExpanded: true,
         children: [
           Padding(
@@ -314,7 +411,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             child: Column(
               children: [
                 ElevatedButton.icon(
-                  onPressed: _showAddPriceDialog,
+                  onPressed: () => _showAddPriceDialog(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة سعر جديد'),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
@@ -350,8 +447,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       ),
     );
   }
-
-  // ========== دوال إضافة المنتج ==========
 
   void _addProduct() async {
     if (!_formKey.currentState!.validate()) return;
@@ -398,8 +493,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
         piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
         defaultUnit: _defaultUnit,
         minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
-        hasOffer: _hasOffer,
-        offerPrice: _hasOffer ? double.tryParse(_offerPriceController.text) : null,
+        hasOffer: false,
+        offerPrice: null,
         createdBy: auth.currentUserId,
       );
 
@@ -453,9 +548,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               const SizedBox(height: 16),
               _buildTextField(_piecesPerCartonController, 'عدد الباكيتات في الكرتون', Icons.view_agenda, isNumber: true),
               const SizedBox(height: 16),
-              _buildOfferSection(),
-              const SizedBox(height: 16),
-              _buildRegionPricingSection(),  // تم الاستبدال
+              _buildRegionPricingSection(),
               const SizedBox(height: 16),
               _buildBonusesSection(),
               const SizedBox(height: 16),
@@ -471,35 +564,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // ========== واجهات المستخدم (UI) ==========
+  // ========== واجهات المستخدم ==========
   
-  Widget _buildOfferSection() {
-    return Card(
-      child: ExpansionTile(
-        title: const Text('عرض خاص', style: TextStyle(fontWeight: FontWeight.bold)),
-        children: [
-          SwitchListTile(
-            title: const Text('تفعيل عرض خاص'),
-            value: _hasOffer,
-            onChanged: (val) => setState(() => _hasOffer = val),
-          ),
-          if (_hasOffer)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: TextField(
-                controller: _offerPriceController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'سعر العرض (وحدة البيع الافتراضية)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAgencyDropdown() => Container(
         decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400), borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(horizontal: 16),

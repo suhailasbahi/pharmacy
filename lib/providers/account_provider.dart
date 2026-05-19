@@ -242,7 +242,8 @@ class AccountProvider extends ChangeNotifier {
 
   // ========== BALANCE CALCULATION ==========
 
-  Future<double> getAccountBalance(String accountId) async {
+   Future<double> getAccountBalance(String accountId) async {
+  try {
     final snapshot = await _firestore
         .collection('ledger_transactions')
         .where('accountId', isEqualTo: accountId)
@@ -252,8 +253,9 @@ class AccountProvider extends ChangeNotifier {
 
     for (var doc in snapshot.docs) {
       final data = doc.data();
-      final type = data['type'];
-      final amount = (data['amount'] as num).toDouble();
+
+      final type = data['type'] ?? 'debit';
+      final amount = (data['amount'] ?? 0).toDouble();
 
       if (type == 'debit') {
         balance += amount;
@@ -263,8 +265,13 @@ class AccountProvider extends ChangeNotifier {
     }
 
     return balance;
+  } catch (e) {
+    debugPrint('getAccountBalance error: $e');
+    return 0;
   }
-
+}
+    
+    
   Future<Map<String, double>> getMultipleBalances(
       List<String> accountIds) async {
     if (accountIds.isEmpty) return {};
@@ -294,22 +301,47 @@ class AccountProvider extends ChangeNotifier {
   }
 
   Future<List<LedgerTransaction>> getAccountTransactions(
-      String accountId) async {
+    String accountId) async {
+  try {
     final snapshot = await _firestore
         .collection('ledger_transactions')
         .where('accountId', isEqualTo: accountId)
-        .orderBy('createdAt', descending: true)
         .get();
 
-    return snapshot.docs.map((doc) {
+    final transactions = snapshot.docs.map((doc) {
       final data = doc.data();
+
+      DateTime date = DateTime.now();
+
+      try {
+        final createdAt = data['createdAt'];
+
+        if (createdAt is Timestamp) {
+          date = createdAt.toDate();
+        }
+      } catch (_) {}
+
+      final type = data['type'] ?? 'debit';
+
       return LedgerTransaction(
         id: doc.id,
-        amount: (data['amount'] as num).toDouble(),
-        date: (data['createdAt'] as Timestamp).toDate(),
+        amount: (data['amount'] ?? 0).toDouble(),
+        date: date,
         note: data['note'] ?? '',
-        type: data['type'] == 'debit' ? 'purchase' : 'payment',
+        type: type == 'debit'
+            ? 'purchase'
+            : 'payment',
       );
     }).toList();
+
+    // ترتيب محلي بدل Firestore index
+    transactions.sort((a, b) => b.date.compareTo(a.date));
+
+    return transactions;
+  } catch (e) {
+    debugPrint('getAccountTransactions error: $e');
+    return [];
+  }
+
   }
 }

@@ -1,50 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/order_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
-import '../../models/region.dart';
 
 class CashCreditSalesScreen extends StatefulWidget {
   const CashCreditSalesScreen({Key? key}) : super(key: key);
 
   @override
-  State<CashCreditSalesScreen> createState() => _CashCreditSalesScreenState();
+  State<CashCreditSalesScreen> createState() =>
+      _CashCreditSalesScreenState();
 }
 
-class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
-  String _selectedRegionId = 'all';
-  DateTimeRange? _dateRange;
-  List<OrderModel> _allOrders = [];
+class _CashCreditSalesScreenState
+    extends State<CashCreditSalesScreen> {
   bool _isLoading = true;
+
+  DateTimeRange? _dateRange;
+
+  List<OrderModel> _orders = [];
 
   @override
   void initState() {
     super.initState();
+
     _loadData();
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final companyId = auth.currentCompanyId;
-    if (companyId == null) {
+
+    try {
+      final auth =
+          Provider.of<AuthService>(context, listen: false);
+
+      final orderProvider =
+          Provider.of<OrderProvider>(context, listen: false);
+
+      final companyId = auth.currentCompanyId;
+
+      if (companyId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      List<OrderModel> orders =
+          await orderProvider.getOrdersForCompany(
+        companyId,
+      );
+
+      // الطلبات المعتمدة فقط
+      orders = orders.where((o) {
+        return o.status == 'accepted' ||
+            o.status == 'shipped' ||
+            o.status == 'delivered';
+      }).toList();
+
+      // فلترة التاريخ
+      if (_dateRange != null) {
+        orders = orders.where((o) {
+          return o.date.isAfter(
+                  _dateRange!.start.subtract(
+                      const Duration(days: 1))) &&
+              o.date.isBefore(
+                  _dateRange!.end.add(
+                      const Duration(days: 1)));
+        }).toList();
+      }
+
+      // ترتيب بالأحدث
+      orders.sort((a, b) => b.date.compareTo(a.date));
+
+      setState(() {
+        _orders = orders;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('CashCreditSalesScreen Error: $e');
+
       setState(() => _isLoading = false);
-      return;
     }
-    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    List<OrderModel> orders = await orderProvider.getOrdersForCompany(companyId);
-    
-    if (_dateRange != null) {
-      orders = orders.where((o) =>
-          o.date.isAfter(_dateRange!.start) &&
-          o.date.isBefore(_dateRange!.end.add(const Duration(days: 1)))).toList();
-    }
-    
-    setState(() {
-      _allOrders = orders;
-      _isLoading = false;
-    });
   }
 
   Future<void> _refresh() async {
@@ -54,70 +90,118 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
   Future<void> _selectDateRange() async {
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime(2024, 1, 1),
+      firstDate: DateTime(2024),
       lastDate: DateTime.now(),
       initialDateRange: _dateRange,
     );
+
     if (picked != null) {
       setState(() => _dateRange = picked);
+
       await _loadData();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ===============================
+    // التحليلات
+    // ===============================
+
+    double totalCashSales = 0;
+
+    double totalCreditSales = 0;
+
+    int cashOrdersCount = 0;
+
+    int creditOrdersCount = 0;
+
+    Map<String, double> paymentMethods = {};
+
+    for (var order in _orders) {
+      // =====================
+      // نقدي
+      // =====================
+
+      if (order.paymentType == 'cash') {
+        totalCashSales += order.totalPrice;
+
+        cashOrdersCount++;
+      }
+
+      // =====================
+      // آجل
+      // =====================
+
+      if (order.paymentType == 'credit') {
+        totalCreditSales += order.totalPrice;
+
+        creditOrdersCount++;
+      }
+
+      // =====================
+      // طرق الدفع
+      // =====================
+
+      final method = order.paymentMethodText;
+
+      paymentMethods[method] =
+          (paymentMethods[method] ?? 0) +
+              order.totalPrice;
+    }
+
+    final totalSales =
+        totalCashSales + totalCreditSales;
+
+    final double cashPercent = totalSales > 0
+        ? (totalCashSales / totalSales) * 100
+        : 0;
+
+    final double creditPercent = totalSales > 0
+        ? (totalCreditSales / totalSales) * 100
+        : 0;
+
+    final avgCashOrder = cashOrdersCount > 0
+        ? totalCashSales / cashOrdersCount
+        : 0;
+
+    final avgCreditOrder = creditOrdersCount > 0
+        ? totalCreditSales / creditOrdersCount
+        : 0;
+
+    final paymentEntries =
+        paymentMethods.entries.toList();
+
+    paymentEntries.sort(
+      (a, b) => b.value.compareTo(a.value),
+    );
+
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('تفصيل المبيعات (نقدي / آجل)'),
+          title: const Text(
+            'المبيعات النقدية والآجلة',
+          ),
           centerTitle: true,
           backgroundColor: Colors.teal,
         ),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
-    List<OrderModel> orders = _allOrders;
-    if (_selectedRegionId != 'all') {
-      final regionName = Region.getNameById(_selectedRegionId);
-      orders = orders.where((o) => o.pharmacyCity == regionName).toList();
-    }
-
-    double totalCash = 0;
-    double totalCredit = 0;
-    Map<String, double> cashByRegion = {};
-    Map<String, double> creditByRegion = {};
-
-    for (var order in orders) {
-      final region = order.pharmacyCity;
-      final amount = order.totalPrice;
-      if (order.paymentType == 'cash') {
-        totalCash += amount;
-        cashByRegion[region] = (cashByRegion[region] ?? 0) + amount;
-      } else {
-        totalCredit += amount;
-        creditByRegion[region] = (creditByRegion[region] ?? 0) + amount;
-      }
-    }
-
-    final total = totalCash + totalCredit;
-    final cashPercent = total > 0 ? (totalCash / total) * 100 : 0;
-    final creditPercent = total > 0 ? (totalCredit / total) * 100 : 0;
-
-    final Set<String> allRegions = {...cashByRegion.keys, ...creditByRegion.keys};
-    final regionList = allRegions.toList();
-    regionList.sort();
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تفصيل المبيعات (نقدي / آجل)'),
+        title: const Text(
+          'المبيعات النقدية والآجلة',
+        ),
         centerTitle: true,
         backgroundColor: Colors.teal,
         actions: [
           IconButton(
             icon: const Icon(Icons.date_range),
             onPressed: _selectDateRange,
-            tooltip: 'تحديد فترة',
           ),
         ],
       ),
@@ -125,79 +209,209 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
         onRefresh: _refresh,
         child: Column(
           children: [
+            // ==========================
+            // التاريخ
+            // ==========================
+
             if (_dateRange != null)
               Container(
-                padding: const EdgeInsets.all(8),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
                 color: Colors.grey.shade100,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('من ${_formatDate(_dateRange!.start)} إلى ${_formatDate(_dateRange!.end)}'),
+                    Text(
+                      'من ${_formatDate(_dateRange!.start)} '
+                      'إلى ${_formatDate(_dateRange!.end)}',
+                    ),
                     TextButton(
                       onPressed: () async {
-                        setState(() => _dateRange = null);
+                        setState(
+                            () => _dateRange = null);
+
                         await _loadData();
                       },
-                      child: const Text('إلغاء التصفية'),
+                      child: const Text(
+                        'إلغاء التصفية',
+                      ),
                     ),
                   ],
                 ),
               ),
+
+            // ==========================
+            // الملخص الرئيسي
+            // ==========================
+
             Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  _buildSummaryCard('إجمالي المبيعات', total, Icons.attach_money, Colors.teal, ''),
+                  _buildSummaryCard(
+                    'النقدي',
+                    totalCashSales,
+                    Icons.money,
+                    Colors.green,
+                  ),
+
                   const SizedBox(width: 12),
-                  _buildSummaryCard('نقدي', totalCash, Icons.money, Colors.green, '${cashPercent.toStringAsFixed(1)}%'),
-                  const SizedBox(width: 12),
-                  _buildSummaryCard('آجل', totalCredit, Icons.credit_card, Colors.orange, '${creditPercent.toStringAsFixed(1)}%'),
+
+                  _buildSummaryCard(
+                    'الآجل',
+                    totalCreditSales,
+                    Icons.credit_card,
+                    Colors.orange,
+                  ),
                 ],
               ),
             ),
+
+            // ==========================
+            // النسب
+            // ==========================
+
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(
+                horizontal: 12,
+              ),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      _buildProgressItem(
+                        'نسبة النقدي',
+                        cashPercent,
+                        Colors.green,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      _buildProgressItem(
+                        'نسبة الآجل',
+                        creditPercent,
+                        Colors.orange,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // ==========================
+            // تفاصيل إضافية
+            // ==========================
+
             Padding(
               padding: const EdgeInsets.all(12),
-              child: DropdownButtonFormField<String>(
-                value: _selectedRegionId,
-                decoration: const InputDecoration(labelText: 'تصفية حسب المحافظة'),
-                items: [
-                  const DropdownMenuItem(value: 'all', child: Text('جميع المحافظات')),
-                  ...regionList.map((region) => DropdownMenuItem(
-                        value: region,
-                        child: Text(region),
-                      )),
-                ],
-                onChanged: (val) => setState(() => _selectedRegionId = val!),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      _buildInfoRow(
+                        'عدد الطلبات النقدية',
+                        cashOrdersCount.toString(),
+                      ),
+
+                      _buildInfoRow(
+                        'عدد الطلبات الآجلة',
+                        creditOrdersCount.toString(),
+                      ),
+
+                      _buildInfoRow(
+                        'متوسط الطلب النقدي',
+                        avgCashOrder
+                            .toStringAsFixed(2),
+                      ),
+
+                      _buildInfoRow(
+                        'متوسط الطلب الآجل',
+                        avgCreditOrder
+                            .toStringAsFixed(2),
+                      ),
+
+                      _buildInfoRow(
+                        'إجمالي المبيعات',
+                        totalSales.toStringAsFixed(2),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
+
+            // ==========================
+            // طرق الدفع
+            // ==========================
+
             Expanded(
-              child: regionList.isEmpty
-                  ? const Center(child: Text('لا توجد بيانات'))
-                  : SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        columnSpacing: 20,
-                        columns: const [
-                          DataColumn(label: Text('المحافظة')),
-                          DataColumn(label: Text('نقدي'), numeric: true),
-                          DataColumn(label: Text('آجل'), numeric: true),
-                          DataColumn(label: Text('الإجمالي'), numeric: true),
-                          DataColumn(label: Text('% نقدي'), numeric: true),
-                        ],
-                        rows: regionList.map((region) {
-                          final cash = cashByRegion[region] ?? 0;
-                          final credit = creditByRegion[region] ?? 0;
-                          final regionTotal = cash + credit;
-                          final regionCashPercent = regionTotal > 0 ? (cash / regionTotal) * 100 : 0;
-                          return DataRow(cells: [
-                            DataCell(Text(region)),
-                            DataCell(Text('${cash.toStringAsFixed(2)}')),
-                            DataCell(Text('${credit.toStringAsFixed(2)}')),
-                            DataCell(Text('${regionTotal.toStringAsFixed(2)}')),
-                            DataCell(Text('${regionCashPercent.toStringAsFixed(1)}%')),
-                          ]);
-                        }).toList(),
+              child: paymentEntries.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'لا توجد بيانات',
                       ),
+                    )
+                  : ListView.builder(
+                      itemCount:
+                          paymentEntries.length,
+                      itemBuilder:
+                          (context, index) {
+                        final entry =
+                            paymentEntries[index];
+
+                        final method =
+                            entry.key;
+
+                        final amount =
+                            entry.value;
+
+                        final percent =
+                            totalSales > 0
+                                ? (amount /
+                                        totalSales) *
+                                    100
+                                : 0;
+
+                        return Card(
+                          margin:
+                              const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor:
+                                  Colors.teal,
+                              child: Text(
+                                '${index + 1}',
+                                style:
+                                    const TextStyle(
+                                  color:
+                                      Colors.white,
+                                ),
+                              ),
+                            ),
+                            title: Text(method),
+                            subtitle: Text(
+                              amount
+                                  .toStringAsFixed(
+                                      2),
+                            ),
+                            trailing: Text(
+                              '${percent.toStringAsFixed(1)}%',
+                              style:
+                                  const TextStyle(
+                                fontWeight:
+                                    FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
             ),
           ],
@@ -206,20 +420,41 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     );
   }
 
-  Widget _buildSummaryCard(String title, double value, IconData icon, Color color, String percentage) {
+  Widget _buildSummaryCard(
+    String title,
+    double value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Card(
         color: color.withOpacity(0.1),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           child: Column(
             children: [
               Icon(icon, color: color),
+
+              const SizedBox(height: 8),
+
+              Text(
+                value.toStringAsFixed(0),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+
               const SizedBox(height: 4),
-              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
-              Text('${value.toStringAsFixed(2)}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-              if (percentage.isNotEmpty)
-                Text(percentage, style: TextStyle(color: color, fontSize: 12)),
+
+              Text(
+                title,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ],
           ),
         ),
@@ -227,5 +462,70 @@ class _CashCreditSalesScreenState extends State<CashCreditSalesScreen> {
     );
   }
 
-  String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
+  Widget _buildProgressItem(
+    String title,
+    double percent,
+    Color color,
+  ) {
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment:
+              MainAxisAlignment.spaceBetween,
+          children: [
+            Text(title),
+
+            Text(
+              '${percent.toStringAsFixed(1)}%',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 6),
+
+        LinearProgressIndicator(
+          value: percent / 100,
+          minHeight: 10,
+          backgroundColor:
+              color.withOpacity(0.15),
+          valueColor:
+              AlwaysStoppedAnimation(color),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(
+    String title,
+    String value,
+  ) {
+    return Padding(
+      padding:
+          const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment:
+            MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title),
+
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
+  }
 }

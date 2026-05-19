@@ -24,22 +24,39 @@ class _CustomerStatementScreenState extends State<CustomerStatementScreen> {
   }
 
   Future<void> _loadData() async {
+  try {
     setState(() => _isLoading = true);
-    
-    final accountProvider = Provider.of<AccountProvider>(context, listen: false);
-    
-    // جلب المعاملات من ledger_transactions
-    final transactions = await accountProvider.getAccountTransactions(widget.customer.id);
-    
-    // جلب الرصيد الحالي
-    final balance = await accountProvider.getAccountBalance(widget.customer.id);
-    
+
+    final accountProvider =
+        Provider.of<AccountProvider>(context, listen: false);
+
+    final transactions =
+        await accountProvider.getAccountTransactions(
+      widget.customer.id,
+    );
+
+    final balance =
+        await accountProvider.getAccountBalance(
+      widget.customer.id,
+    );
+
+    if (!mounted) return;
+
     setState(() {
       _transactions = transactions;
       _currentBalance = balance;
       _isLoading = false;
     });
+  } catch (e) {
+    debugPrint('Statement load error: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
