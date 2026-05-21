@@ -4,6 +4,8 @@ import '../../providers/order_provider.dart';
 import '../../providers/account_provider.dart';
 import '../../services/auth_service.dart';
 import '../../models/order_model.dart';
+import '../../screens/company/edit_order_screen.dart';
+
 
 class CompanyOrdersScreen extends StatefulWidget {
   @override
@@ -99,6 +101,24 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
       case 'shipped': return Colors.purple;
       case 'delivered': return Colors.green;
       default: return Colors.grey;
+    }
+  }
+    
+    Future<void> _editOrder() async {
+    if (_isProcessing) return;
+    
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditOrderScreen(order: widget.order),
+      ),
+    );
+    
+    if (result == true) {
+      widget.onStatusChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم تعديل الطلب بنجاح'), backgroundColor: Colors.green),
+      );
     }
   }
 
@@ -300,6 +320,18 @@ class _CompanyOrderCardState extends State<CompanyOrderCard> {
                   if (order.status == 'pending')
                     Row(
                       children: [
+                          if (auth.canAcceptOrder || auth.canRejectOrder)
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _editOrder,
+                              icon: const Icon(Icons.edit, size: 18),
+                              label: const Text('تعديل'),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.orange),
+                                foregroundColor: Colors.orange,
+                              ),
+                            ),
+                          ),
                         if (auth.canRejectOrder)
                           Expanded(
                             child: OutlinedButton(

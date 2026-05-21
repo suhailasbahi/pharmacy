@@ -9,6 +9,7 @@ class CartProvider extends ChangeNotifier {
   int get totalQuantity => _items.fold(0, (sum, item) => sum + item.quantity);
   int get totalBonus => _items.fold(0, (sum, item) => sum + item.bonus);
   double get totalPrice => _items.fold(0, (sum, item) => sum + item.totalPrice);
+    int get itemCount => _items.length;
 
   bool isInCart(String productId) => _items.any((item) => item.id == productId);
 

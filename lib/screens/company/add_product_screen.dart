@@ -15,7 +15,6 @@ import '../../providers/product_provider.dart';
 class _PriceGroup {
   double price;
   String currency;
-  double taxRate;
   List<Region> regions;
   bool hasOffer;
   double? offerPrice;
@@ -23,7 +22,6 @@ class _PriceGroup {
   _PriceGroup({
     required this.price,
     required this.currency,
-    required this.taxRate,
     required this.regions,
     this.hasOffer = false,
     this.offerPrice,
@@ -144,9 +142,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final priceController = TextEditingController(
       text: existingGroup?.price.toString() ?? '',
     );
-    final taxController = TextEditingController(
-      text: existingGroup?.taxRate.toString() ?? '',
-    );
+    
     final offerPriceController = TextEditingController(
       text: existingGroup?.offerPrice?.toString() ?? '',
     );
@@ -189,15 +185,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ],
                     onChanged: (v) => setDialogState(() => selectedCurrency = v!),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: taxController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'الضريبة (%)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                
                   const SizedBox(height: 12),
                   const Divider(),
                   SwitchListTile(
@@ -278,7 +266,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     final newGroup = _PriceGroup(
                       price: price,
                       currency: selectedCurrency,
-                      taxRate: double.tryParse(taxController.text) ?? 0,
+                      
                       regions: selectedRegions,
                       hasOffer: hasOffer,
                       offerPrice: offerPrice,
@@ -317,7 +305,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
           regionName: region.name,
           price: group.price,
           currency: group.currency,
-          taxRate: group.taxRate,
           hasOffer: group.hasOffer,
           offerPrice: group.offerPrice,
         ));
@@ -335,70 +322,69 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
-  Widget _buildPriceGroupCard(_PriceGroup group, int index) {
-    final currencySymbol = _getCurrencySymbol(group.currency);
-    
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: group.hasOffer ? Colors.red.shade50 : Colors.grey.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '${group.price.toStringAsFixed(2)} $currencySymbol',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.teal,
+     Widget _buildPriceGroupCard(_PriceGroup group, int index) {
+  final currencySymbol = _getCurrencySymbol(group.currency);
+  
+  return Card(
+    margin: const EdgeInsets.only(bottom: 12),
+    color: group.hasOffer ? Colors.red.shade50 : Colors.grey.shade50,
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '${group.price.toStringAsFixed(2)} $currencySymbol',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal,
+                    ),
+                  ),
+                  if (group.hasOffer && group.offerPrice != null)
+                    Container(
+                      margin: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'عرض: ${group.offerPrice!.toStringAsFixed(2)} $currencySymbol',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                    if (group.hasOffer && group.offerPrice != null)
-                      Container(
-                        margin: const EdgeInsets.only(left: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'عرض: ${group.offerPrice!.toStringAsFixed(2)} $currencySymbol',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _removePriceGroup(index),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text('ضريبة: ${group.taxRate}%', style: const TextStyle(fontSize: 12)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: group.regions.map((r) => Chip(
-                label: Text(r.name),
-                backgroundColor: group.hasOffer ? Colors.red.shade100 : Colors.teal.shade50,
-              )).toList(),
-            ),
-          ],
-        ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _removePriceGroup(index),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: group.regions.map((r) => Chip(
+              label: Text(r.name),
+              backgroundColor: group.hasOffer ? Colors.red.shade100 : Colors.teal.shade50,
+            )).toList(),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+    
 
   Widget _buildRegionPricingSection() {
     return Card(

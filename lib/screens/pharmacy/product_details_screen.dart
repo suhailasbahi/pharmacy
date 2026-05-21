@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/product_model.dart';
 import '../../models/cart_item.dart';
 import '../../providers/cart_provider.dart';
 import '../../services/auth_service.dart';
-import '../../models/dummy_products.dart';
 
 class ProductDetailsScreen extends StatelessWidget {
   final ProductModel product;
@@ -13,32 +13,44 @@ class ProductDetailsScreen extends StatelessWidget {
 
   const ProductDetailsScreen({Key? key, required this.product, required this.regionId}) : super(key: key);
 
-  List<ProductModel> get similarProducts {
-    List<ProductModel> all = [];
-    for (var agency in dummyAgencies) {
-      all.addAll(agency.products);
+  // جلب منتجات مشابهة من Firestore (نفس الاسم العلمي)
+  Future<List<ProductModel>> _getSimilarProducts() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('products')
+          .where('scientificName', isEqualTo: product.scientificName)
+          .where('isActive', isEqualTo: true)
+          .get();
+      
+      final allProducts = snapshot.docs
+          .map((doc) => ProductModel.fromMap(doc.id, doc.data()))
+          .toList();
+      
+      // استبعاد المنتج الحالي
+      return allProducts.where((p) => p.id != product.id).toList();
+    } catch (e) {
+      print('Error loading similar products: $e');
+      return [];
     }
-    return all.where((p) => p.id != product.id && p.scientificName == product.scientificName && p.isActive).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    // داخل دالة build، قبل إنشاء cartItem:
+    final authService = Provider.of<AuthService>(context);
+    final effectiveCompanyName = (authService.currentCompanyId == product.companyId && authService.currentCompanyName != null)
+        ? authService.currentCompanyName
+        : product.companyName;
 
-final authService = Provider.of<AuthService>(context);
-final effectiveCompanyName = (authService.currentCompanyId == product.companyId && authService.currentCompanyName != null)
-    ? authService.currentCompanyName
-    : product.companyName;
-
-final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: effectiveCompanyName);
-      
     final isPharmacy = authService.currentUserType == 'pharmacy';
     final cartProvider = Provider.of<CartProvider>(context);
     final isInCart = cartProvider.isInCart(product.id);
-    final price = product.getFinalPriceForRegion(regionId);
+    
+    // ========== حساب الأسعار بشكل موحد ==========
+    final hasOffer = product.hasOfferForRegion(regionId);
+    final displayPrice = product.getFinalPriceForRegion(regionId);
+    final originalPrice = product.getOriginalPriceForRegion(regionId);
     final currency = product.getCurrencyForRegion(regionId);
     final currencySymbol = currency == 'yemen' ? 'ر.ي' : (currency == 'saudi' ? 'ر.س' : '\$');
-    final similar = similarProducts;
 
     return Scaffold(
       appBar: AppBar(
@@ -50,13 +62,37 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // صورة المنتج
             Container(
               height: 200,
               width: double.infinity,
               color: Colors.teal.shade50,
-              child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                  ? Image.file(File(product.imageUrl!), fit: BoxFit.cover, width: double.infinity)
-                  : Icon(Icons.medication, size: 80, color: Colors.teal),
+              child: Stack(
+                children: [
+                  Center(
+                    child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                        ? Image.file(File(product.imageUrl!), fit: BoxFit.cover, width: double.infinity)
+                        : Icon(Icons.medication, size: 80, color: Colors.teal),
+                  ),
+                  // علامة العرض
+                  if (hasOffer)
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'عرض خاص',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -78,22 +114,24 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                     style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 16),
+                  
+                  // عرض السعر
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
-                      color: product.hasOffer ? Colors.red.shade50 : Colors.teal.shade50,
+                      color: hasOffer ? Colors.red.shade50 : Colors.teal.shade50,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('السعر:', style: TextStyle(fontSize: 18)),
-                        if (product.hasOffer && product.offerPrice != null)
+                        if (hasOffer)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '${product.offerPrice!.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
+                                '${displayPrice.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
                                 style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
@@ -101,7 +139,7 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                                 ),
                               ),
                               Text(
-                                '${price.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
+                                '${originalPrice.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
                                 style: const TextStyle(
                                   decoration: TextDecoration.lineThrough,
                                   color: Colors.grey,
@@ -112,7 +150,7 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                           )
                         else
                           Text(
-                            '${price.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
+                            '${displayPrice.toStringAsFixed(2)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -122,7 +160,10 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                       ],
                     ),
                   ),
+                  
                   const SizedBox(height: 16),
+                  
+                  // معلومات الكرتون
                   if (product.piecesPerCarton > 0 && product.defaultUnit == 'carton')
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -143,7 +184,10 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                         ],
                       ),
                     ),
+                  
                   const SizedBox(height: 16),
+                  
+                  // البونص النقدي
                   if (product.bonusCash != null && product.bonusCash!.percentage > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -164,6 +208,8 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                         ],
                       ),
                     ),
+                  
+                  // البونص الآجل
                   if (product.bonusCredit != null && product.bonusCredit!.percentage > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -184,7 +230,10 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                         ],
                       ),
                     ),
+                  
                   const SizedBox(height: 16),
+                  
+                  // معلومات إضافية
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -197,8 +246,10 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                       ),
                     ),
                   ),
+                  
                   const SizedBox(height: 24),
-                  // إظهار زر الإضافة فقط إذا كان المستخدم صيدلية
+                  
+                  // زر الإضافة إلى السلة
                   if (isPharmacy)
                     SizedBox(
                       width: double.infinity,
@@ -232,58 +283,123 @@ final cartItem = CartItem.fromProduct(product, regionId, overriddenCompanyName: 
                         ),
                       ),
                     ),
-                  if (similar.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'منتجات مشابهة (نفس الاسم العلمي)',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 160,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: similar.length,
-                        itemBuilder: (ctx, idx) {
-                          final p = similar[idx];
-                          final pPrice = p.getFinalPriceForRegion(regionId);
-                          final pCurrency = p.getCurrencyForRegion(regionId);
-                          final pSymbol = pCurrency == 'yemen' ? 'ر.ي' : (pCurrency == 'saudi' ? 'ر.س' : '\$');
-                          return GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ProductDetailsScreen(product: p, regionId: regionId),
-                                ),
-                              );
-                            },
-                            child: Card(
-                              margin: const EdgeInsets.only(right: 12),
-                              child: Container(
-                                width: 140,
-                                padding: const EdgeInsets.all(8),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      height: 80,
-                                      width: double.infinity,
-                                      color: Colors.teal.shade100,
-                                      child: const Center(child: Icon(Icons.medication, size: 40)),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // منتجات مشابهة (جلب من Firestore)
+                  FutureBuilder<List<ProductModel>>(
+                    future: _getSimilarProducts(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox.shrink();
+                      }
+                      
+                      final similar = snapshot.data ?? [];
+                      if (similar.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'منتجات مشابهة (نفس الاسم العلمي)',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 160,
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: similar.length,
+                              itemBuilder: (ctx, idx) {
+                                final p = similar[idx];
+                                final pPrice = p.getFinalPriceForRegion(regionId);
+                                final pCurrency = p.getCurrencyForRegion(regionId);
+                                final pSymbol = pCurrency == 'yemen' ? 'ر.ي' : (pCurrency == 'saudi' ? 'ر.س' : '\$');
+                                final pHasOffer = p.hasOfferForRegion(regionId);
+                                
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ProductDetailsScreen(product: p, regionId: regionId),
+                                      ),
+                                    );
+                                  },
+                                  child: Card(
+                                    margin: const EdgeInsets.only(right: 12),
+                                    child: Container(
+                                      width: 140,
+                                      padding: const EdgeInsets.all(8),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Container(
+                                            height: 80,
+                                            width: double.infinity,
+                                            color: Colors.teal.shade100,
+                                            child: Stack(
+                                              children: [
+                                                const Center(child: Icon(Icons.medication, size: 40)),
+                                                if (pHasOffer)
+                                                  Positioned(
+                                                    top: 4,
+                                                    left: 4,
+                                                    child: Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.red,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: const Text(
+                                                        'عرض',
+                                                        style: TextStyle(color: Colors.white, fontSize: 8),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 4),
+                                          if (pHasOffer)
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '${pPrice.toStringAsFixed(0)} $pSymbol',
+                                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11),
+                                                ),
+                                                Text(
+                                                  '${p.getOriginalPriceForRegion(regionId).toStringAsFixed(0)} $pSymbol',
+                                                  style: const TextStyle(
+                                                    decoration: TextDecoration.lineThrough,
+                                                    color: Colors.grey,
+                                                    fontSize: 9,
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          else
+                                            Text(
+                                              '${pPrice.toStringAsFixed(0)} $pSymbol',
+                                              style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 11),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                    Text('$pPrice $pSymbol', style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),

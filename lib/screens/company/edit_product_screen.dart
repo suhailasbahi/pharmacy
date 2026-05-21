@@ -12,7 +12,6 @@ import '../../providers/product_provider.dart';
 class _PriceGroup {
   double price;
   String currency;
-  double taxRate;
   List<Region> regions;
   bool hasOffer;
   double? offerPrice;
@@ -20,7 +19,6 @@ class _PriceGroup {
   _PriceGroup({
     required this.price,
     required this.currency,
-    required this.taxRate,
     required this.regions,
     this.hasOffer = false,
     this.offerPrice,
@@ -97,13 +95,12 @@ class _EditProductScreenState extends State<EditProductScreen> {
     final Map<String, _PriceGroup> groupMap = {};
     
     for (var pricing in existingPrices) {
-      final key = '${pricing.price}_${pricing.currency}_${pricing.taxRate}_${pricing.hasOffer}_${pricing.offerPrice}';
+      final key = '${pricing.price}_${pricing.currency}_${pricing.hasOffer}_${pricing.offerPrice}';
       
       if (!groupMap.containsKey(key)) {
         groupMap[key] = _PriceGroup(
           price: pricing.price,
           currency: pricing.currency,
-          taxRate: pricing.taxRate,
           regions: [],
           hasOffer: pricing.hasOffer,
           offerPrice: pricing.offerPrice,
@@ -142,9 +139,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
     final priceController = TextEditingController(
       text: existingGroup?.price.toString() ?? '',
     );
-    final taxController = TextEditingController(
-      text: existingGroup?.taxRate.toString() ?? '',
-    );
     final offerPriceController = TextEditingController(
       text: existingGroup?.offerPrice?.toString() ?? '',
     );
@@ -172,7 +166,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     controller: priceController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'السعر الأساسي',
+                      labelText: 'السعر',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -186,15 +180,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
                       DropdownMenuItem(value: 'dollar', child: Text('دولار')),
                     ],
                     onChanged: (v) => setDialogState(() => selectedCurrency = v!),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: taxController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'الضريبة (%)',
-                      border: OutlineInputBorder(),
-                    ),
                   ),
                   const SizedBox(height: 12),
                   const Divider(),
@@ -282,7 +267,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
                     final newGroup = _PriceGroup(
                       price: price,
                       currency: selectedCurrency,
-                      taxRate: double.tryParse(taxController.text) ?? 0,
                       regions: selectedRegions,
                       hasOffer: hasOffer,
                       offerPrice: offerPrice,
@@ -325,7 +309,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
           regionName: region.name,
           price: group.price,
           currency: group.currency,
-          taxRate: group.taxRate,
           hasOffer: group.hasOffer,
           offerPrice: group.offerPrice,
         ));
@@ -399,8 +382,6 @@ class _EditProductScreenState extends State<EditProductScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text('ضريبة: ${group.taxRate}%', style: const TextStyle(fontSize: 12)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -481,7 +462,7 @@ class _EditProductScreenState extends State<EditProductScreen> {
     if (picked != null) setState(() => _expiryDate = picked);
   }
 
-  void _updateProduct() {
+  void _updateProduct() async {
     if (!_formKey.currentState!.validate()) return;
     if (_priceGroups.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -492,47 +473,53 @@ class _EditProductScreenState extends State<EditProductScreen> {
     
     setState(() => _isLoading = true);
 
-    final updatedProduct = ProductModel(
-      id: widget.product.id,
-      companyId: widget.product.companyId,
-      companyName: widget.product.companyName,
-      agencyId: widget.agencyId,
-      name: _nameController.text.trim(),
-      scientificName: _scientificNameController.text.trim(),
-      concentration: _concentrationController.text.trim(),
-      stockQuantity: int.parse(_stockController.text),
-      requiresCooling: _requiresCooling,
-      imageUrl: _selectedImage?.path ?? widget.product.imageUrl,
-      expiryDate: _expiryDate,
-      isActive: true,
-      createdAt: widget.product.createdAt,
-      regionPrices: _convertToRegionPricing(),
-      hasOffer: false,
-      offerPrice: null,
-      bonusCash: _bonusCash,
-      bonusCredit: _bonusCredit,
-      pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
-      pricePerCarton: double.tryParse(_pricePerCartonController.text) ?? 0,
-      piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
-      defaultUnit: _defaultUnit,
-      minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
-      createdBy: widget.product.createdBy,
-      branchId: widget.product.branchId,
-    );
+    try {
+      final updatedProduct = ProductModel(
+        id: widget.product.id,
+        companyId: widget.product.companyId,
+        companyName: widget.product.companyName,
+        agencyId: widget.agencyId,
+        name: _nameController.text.trim(),
+        scientificName: _scientificNameController.text.trim(),
+        concentration: _concentrationController.text.trim(),
+        stockQuantity: int.parse(_stockController.text),
+        requiresCooling: _requiresCooling,
+        imageUrl: _selectedImage?.path ?? widget.product.imageUrl,
+        expiryDate: _expiryDate,
+        isActive: true,
+        createdAt: widget.product.createdAt,
+        regionPrices: _convertToRegionPricing(),
+        hasOffer: false,
+        offerPrice: null,
+        bonusCash: _bonusCash,
+        bonusCredit: _bonusCredit,
+        pricePerPiece: double.tryParse(_pricePerPieceController.text) ?? 0,
+        pricePerCarton: double.tryParse(_pricePerCartonController.text) ?? 0,
+        piecesPerCarton: int.tryParse(_piecesPerCartonController.text) ?? 1,
+        defaultUnit: _defaultUnit,
+        minOrderQuantity: int.tryParse(_minOrderController.text) ?? 1,
+        createdBy: widget.product.createdBy,
+        branchId: widget.product.branchId,
+      );
 
-    final productProvider = Provider.of<ProductProvider>(context, listen: false);
-    productProvider.updateProduct(updatedProduct).then((_) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم تعديل المنتج بنجاح'), backgroundColor: Colors.green),
-      );
-      Navigator.pop(context, true);
-    }).catchError((e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
-      );
-    });
+      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+      await productProvider.updateProduct(updatedProduct);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم تعديل المنتج بنجاح'), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('حدث خطأ: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -739,9 +726,13 @@ class _EditProductScreenState extends State<EditProductScreen> {
       width: double.infinity,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _updateProduct,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.teal,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.white)
-            : const Text('حفظ التعديلات'),
+            : const Text('حفظ التعديلات', style: TextStyle(fontSize: 16)),
       ),
     );
   }

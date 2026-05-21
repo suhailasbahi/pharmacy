@@ -23,8 +23,8 @@ class ProductModel {
   final int piecesPerCarton;
   final String defaultUnit;
   final int minOrderQuantity;
-  final bool hasOffer;      // ملاحظة: هذا للعرض العام (تم إهماله لصالح العروض حسب المنطقة)
-  final double? offerPrice; // ملاحظة: هذا للعرض العام (تم إهماله لصالح العروض حسب المنطقة)
+  final bool hasOffer;
+  final double? offerPrice;
   final String? createdBy;
   final String? branchId;
 
@@ -80,16 +80,30 @@ class ProductModel {
   // التحقق مما إذا كان هناك عرض لهذه المنطقة
   bool hasOfferForRegion(String regionId) {
     final pricing = getPricingForRegion(regionId);
-    return pricing?.hasOffer ?? false;
+    if (pricing != null && pricing.hasOffer) return true;
+    // عرض عام على المنتج (كحل احتياطي)
+    if (hasOffer && offerPrice != null) return true;
+    return false;
   }
 
   // الحصول على سعر العرض لهذه المنطقة (إذا موجود)
   double? getOfferPriceForRegion(String regionId) {
     final pricing = getPricingForRegion(regionId);
     if (pricing != null && pricing.hasOffer && pricing.offerPrice != null) {
-      return pricing.offerPrice! + (pricing.offerPrice! * pricing.taxRate / 100);
+      return pricing.offerPrice;
+    }
+    // عرض عام على المنتج (كحل احتياطي)
+    if (hasOffer && offerPrice != null) {
+      return offerPrice;
     }
     return null;
+  }
+
+  // السعر الأصلي قبل العرض
+  double getOriginalPriceForRegion(String regionId) {
+    final pricing = getPricingForRegion(regionId);
+    if (pricing == null) return 0;
+    return pricing.price;
   }
 
   String getCurrencyForRegion(String regionId) {

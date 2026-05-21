@@ -39,9 +39,13 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context);
     final category = _getCategoryFromName(product.name);
-    final price = product.getFinalPriceForRegion(regionId);
+    
+    final hasOffer = product.hasOfferForRegion(regionId);
+    final displayPrice = product.getFinalPriceForRegion(regionId);
+    final originalPrice = product.getOriginalPriceForRegion(regionId);
     final currency = product.getCurrencyForRegion(regionId);
     final currencySymbol = currency == 'yemen' ? 'ر.ي' : (currency == 'saudi' ? 'ر.س' : '\$');
+    
     final maxBonus = (product.bonusCash?.percentage ?? 0) > (product.bonusCredit?.percentage ?? 0)
         ? (product.bonusCash?.percentage ?? 0)
         : (product.bonusCredit?.percentage ?? 0);
@@ -72,10 +76,30 @@ class ProductCard extends StatelessWidget {
                   color: _getCategoryColor(category),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
                 ),
-                child: Center(
-                  child: product.imageUrl != null && product.imageUrl!.isNotEmpty
-                      ? Image.file(File(product.imageUrl!), fit: BoxFit.cover, width: double.infinity, height: double.infinity)
-                      : Icon(Icons.medication, size: 40, color: Colors.white),
+                child: Stack(
+                  children: [
+                    Center(
+                      child: product.imageUrl != null && product.imageUrl!.isNotEmpty
+                          ? Image.file(File(product.imageUrl!), fit: BoxFit.cover, width: double.infinity, height: double.infinity)
+                          : Icon(Icons.medication, size: 40, color: Colors.white),
+                    ),
+                    if (hasOffer)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'عرض',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -103,33 +127,63 @@ class ProductCard extends StatelessWidget {
                           maxLines: 1,
                         ),
                         const SizedBox(height: 4),
-                        if (product.hasOffer && product.offerPrice != null)
-                          Row(
+                        
+                        if (hasOffer)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '${product.offerPrice!.toStringAsFixed(0)}',
-                                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${displayPrice.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    ' $currencySymbol',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  Text(
+                                    ' / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
+                                    style: const TextStyle(fontSize: 9, color: Colors.red),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${price.toStringAsFixed(0)}',
-                                style: const TextStyle(decoration: TextDecoration.lineThrough, color: Colors.grey, fontSize: 10),
-                              ),
-                              Text(
-                                currencySymbol,
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                              Text(
-                                ' / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
-                                style: const TextStyle(fontSize: 10),
+                              Row(
+                                children: [
+                                  Text(
+                                    '${originalPrice.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: Colors.grey,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  Text(
+                                    ' $currencySymbol',
+                                    style: const TextStyle(
+                                      decoration: TextDecoration.lineThrough,
+                                      color: Colors.grey,
+                                      fontSize: 8,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           )
                         else
                           Text(
-                            '${price.toStringAsFixed(0)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
+                            '${displayPrice.toStringAsFixed(0)} $currencySymbol / ${product.defaultUnit == 'carton' ? 'كرتون' : 'باكيت'}',
                             style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 11),
                           ),
+                        
                         if (maxBonus > 0)
                           Container(
                             margin: const EdgeInsets.only(top: 2),

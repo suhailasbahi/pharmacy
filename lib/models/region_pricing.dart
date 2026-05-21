@@ -3,16 +3,14 @@ class RegionPricing {
   final String regionName;
   final double price;
   final String currency; // 'yemen', 'saudi', 'dollar'
-  final double taxRate;
-  final bool hasOffer;      // جديد: هل هذا السعر له عرض؟
-  final double? offerPrice; // جديد: سعر العرض (إذا موجود)
+  final bool hasOffer;      // هل هذا السعر له عرض؟
+  final double? offerPrice; // سعر العرض (إذا موجود)
 
   RegionPricing({
     required this.regionId,
     required this.regionName,
     required this.price,
     required this.currency,
-    this.taxRate = 0.0,
     this.hasOffer = false,
     this.offerPrice,
   });
@@ -23,7 +21,6 @@ class RegionPricing {
       'regionName': regionName,
       'price': price,
       'currency': currency,
-      'taxRate': taxRate,
       'hasOffer': hasOffer,
       'offerPrice': offerPrice,
     };
@@ -35,20 +32,18 @@ class RegionPricing {
       regionName: map['regionName'] ?? '',
       price: (map['price'] ?? 0.0).toDouble(),
       currency: map['currency'] ?? 'yemen',
-      taxRate: (map['taxRate'] ?? 0.0).toDouble(),
       hasOffer: map['hasOffer'] ?? false,
       offerPrice: map['offerPrice']?.toDouble(),
     );
   }
 
-  // الحصول على السعر النهائي (بعد الضريبة) مع مراعاة العرض
+  // الحصول على السعر النهائي (مع مراعاة العرض)
   double getFinalPrice() {
-    final basePrice = (hasOffer && offerPrice != null) ? offerPrice! : price;
-    return basePrice + (basePrice * taxRate / 100);
+    return (hasOffer && offerPrice != null) ? offerPrice! : price;
   }
 
-  // الحصول على السعر الأصلي (قبل الضريبة) مع مراعاة العرض
+  // الحصول على السعر الأصلي
   double getBasePrice() {
-    return (hasOffer && offerPrice != null) ? offerPrice! : price;
+    return price;
   }
 }
